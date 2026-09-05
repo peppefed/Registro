@@ -1,0 +1,17 @@
+{
+  "name": "Registro Docenti",
+  "short_name": "Registro",
+  "description": "Registro scolastico per docenti con gestione presenze, voti, lezioni e valutazioni",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#2C6E63",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

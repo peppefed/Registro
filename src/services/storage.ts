@@ -639,4 +639,23 @@ export const StorageService = {
     this.init();
     notifyChange();
   },
+  clearAllData(): void {
+    const emptySchool: School = {
+      id: 'school-1',
+      name: 'Il Mio Istituto',
+      city: '',
+      academicYear: '2025/2026',
+      notes: '',
+    };
+    localStorage.clear();
+    setJson(STORAGE_KEYS.SCHOOLS, [emptySchool]);
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_SCHOOL_ID, emptySchool.id);
+    setJson(STORAGE_KEYS.STUDENTS, []);
+    setJson(STORAGE_KEYS.ATTENDANCE, []);
+    setJson(STORAGE_KEYS.LESSONS, []);
+    setJson(STORAGE_KEYS.EVALUATIONS, []);
+    setJson(STORAGE_KEYS.TESTS, []);
+    setJson(STORAGE_KEYS.LAYOUT_CONFIG, DEFAULT_LAYOUT_CONFIG);
+    notifyChange();
+  },
 };

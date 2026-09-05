@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StorageService } from '../services/storage';
-import { Database, Download, Upload, RotateCcw, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { Database, Download, Upload, RotateCcw, X, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -54,6 +54,19 @@ export const DatabaseBackupModal: React.FC<Props> = ({
       StorageService.resetToDefaults();
       onDataReset();
       onClose();
+    }
+  };
+
+  const handleClearAllData = () => {
+    const confirmation = prompt(
+      'ATTENZIONE: Questa operazione eliminerà tutti gli istituti, alunni, voti, presenze e lezioni salvati nel browser.\n\nPer confermare scrivi "CANCELLA" e premi OK:'
+    );
+    if (confirmation === 'CANCELLA') {
+      StorageService.clearAllData();
+      onDataReset();
+      onClose();
+    } else if (confirmation !== null) {
+      alert('Operazione annullata. La parola di conferma inserita non è corretta.');
     }
   };
 
@@ -142,10 +155,28 @@ export const DatabaseBackupModal: React.FC<Props> = ({
             </div>
             <button
               onClick={handleResetToDefaults}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-white px-3.5 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100 shadow-xs transition"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-white px-3.5 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100 shadow-xs transition cursor-pointer"
             >
               <RotateCcw className="h-4 w-4" />
               Ripristina
+            </button>
+          </div>
+
+          {/* Clear All Data Button */}
+          <div className="rounded-xl border border-rose-200 p-4 bg-rose-50/40 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-rose-950">Cancella Tutti i Dati</h3>
+              <p className="text-xs text-rose-700">
+                Svuota completamente il registro (alunni, voti, presenze e istituti).
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleClearAllData}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-300 bg-rose-600 hover:bg-rose-700 px-3.5 py-2 text-xs font-bold text-white shadow-xs transition cursor-pointer"
+            >
+              <Trash2 className="h-4 w-4" />
+              Cancella Tutto
             </button>
           </div>
         </div>

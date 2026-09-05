@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="128" fill="#2C6E63"/>
+  <!-- Open Book Icon -->
+  <path d="M128 140c32-20 80-24 128-4v240c-48-20-96-16-128 4V140z" fill="#FFFFFF" opacity="0.95"/>
+  <path d="M384 140c-32-20-80-24-128-4v240c48-20 96-16 128 4V140z" fill="#E2E8F0"/>
+  <!-- Musical / Academic Note Badge -->
+  <circle cx="256" cy="180" r="44" fill="#D97757"/>
+  <path d="M248 162v32a14 14 0 1 0 14-4v-28h16v-10h-26c-2.2 0-4 1.8-4 4z" fill="#FFFFFF"/>
+  <!-- Accent Lines -->
+  <rect x="156" y="210" width="70" height="8" rx="4" fill="#CBD5E1"/>
+  <rect x="156" y="234" width="60" height="8" rx="4" fill="#CBD5E1"/>
+  <rect x="156" y="258" width="50" height="8" rx="4" fill="#CBD5E1"/>
+  <rect x="286" y="210" width="70" height="8" rx="4" fill="#94A3B8"/>
+  <rect x="286" y="234" width="60" height="8" rx="4" fill="#94A3B8"/>
+  <rect x="286" y="258" width="50" height="8" rx="4" fill="#94A3B8"/>
+</svg>
