@@ -9,7 +9,6 @@ import {
   ChevronDown,
   BookOpen,
 } from 'lucide-react';
-import { GoogleAuthButton } from './GoogleAuthButton';
 
 interface Props {
   schools: School[];
@@ -157,20 +156,17 @@ export const Navbar: React.FC<Props> = ({
             </button>
           </nav>
 
-          {/* Right Action: Backup Database & Google Auth */}
+          {/* Right Action: Backup Database & Local Storage */}
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onOpenBackupModal}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 sm:px-3 py-1.5 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition cursor-pointer"
-              title="Database Unificato e Backup JSON"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-2xs hover:shadow-xs transition cursor-pointer"
+              title="Backup, Esportazione e Ripristino JSON"
             >
-              <Database className="h-3.5 w-3.5 text-petrol" />
-              <span className="hidden sm:inline">Backup</span>
+              <Database className="h-4 w-4 text-[#2C6E63]" />
+              <span>Backup & Dati</span>
             </button>
-
-            {/* Google Login & Multi-Device Sync */}
-            <GoogleAuthButton />
           </div>
         </div>
 

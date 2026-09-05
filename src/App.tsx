@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { School, Student } from './types';
 import { StorageService } from './services/storage';
-import { initSyncService, SyncService } from './services/syncService';
 import { Navbar } from './components/Navbar';
 import { StudentList } from './components/StudentList';
 import { StudentDetailView } from './components/StudentDetailView';
@@ -10,15 +9,8 @@ import { SchoolManagerModal } from './components/SchoolManagerModal';
 import { ClassRegisterView } from './components/ClassRegisterView';
 import { MonthlyReportsView } from './components/MonthlyReportsView';
 import { DatabaseBackupModal } from './components/DatabaseBackupModal';
-import { User } from 'firebase/auth';
-import { Smartphone, X } from 'lucide-react';
 
 export default function App() {
-  const [authUser, setAuthUser] = useState<User | null>(null);
-  const [dismissBanner, setDismissBanner] = useState<boolean>(() => {
-    return localStorage.getItem('registro_dismiss_sync_banner') === 'true';
-  });
-
   const [schools, setSchools] = useState<School[]>(() => {
     StorageService.init();
     return StorageService.getSchools();
@@ -55,21 +47,15 @@ export default function App() {
     });
   };
 
-  // Initialize storage & sync service with real-time listeners
+  // Initialize storage & subscribe to changes
   useEffect(() => {
     StorageService.init();
-    const cleanupSync = initSyncService();
     const cleanupStorage = StorageService.subscribe(() => {
       refreshAllData();
     });
-    const cleanupAuth = SyncService.subscribeAuth((u) => {
-      setAuthUser(u);
-    });
 
     return () => {
-      cleanupSync();
       cleanupStorage();
-      cleanupAuth();
     };
   }, []);
 
@@ -131,45 +117,6 @@ export default function App() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
-        {/* Multi-Device Cloud Sync Notice */}
-        {!authUser && !dismissBanner && (
-          <div className="mb-6 rounded-2xl border border-petrol/20 bg-petrol-light/40 p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-petrol p-2 text-white shrink-0">
-                <Smartphone className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="text-xs sm:text-sm font-bold text-petrol">
-                  Usa il tuo registro da qualsiasi dispositivo (tablet, smartphone o PC scuola)
-                </h2>
-                <p className="text-[11px] text-slate-600 mt-0.5">
-                  Accedi con il tuo account Google in alto a destra: i tuoi dati saranno salvati nel Cloud protetto e sempre sincronizzati in tempo reale.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-              <button
-                type="button"
-                onClick={() => SyncService.loginWithGoogle()}
-                className="rounded-xl bg-terracotta px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-terracotta-hover transition cursor-pointer"
-              >
-                Accedi con Google
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setDismissBanner(true);
-                  localStorage.setItem('registro_dismiss_sync_banner', 'true');
-                }}
-                className="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 hover:bg-white/60 transition cursor-pointer"
-                title="Nascondi avviso"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        )}
-
         {selectedStudent ? (
           /* Student Detail Page: Diary, Attendance, Periodic Evaluations, PDF Report */
           <StudentDetailView
