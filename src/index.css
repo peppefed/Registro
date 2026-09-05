@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+@theme {
+  --color-petrol: #3D6B7D;
+  --color-petrol-dark: #2C5260;
+  --color-petrol-light: #EEF4F6;
+  --color-petrol-50: #F3F7F8;
+  --color-petrol-100: #E2ECEF;
+
+  --color-terracotta: #E8845C;
+  --color-terracotta-hover: #D7724A;
+  --color-terracotta-light: #FDF3EE;
+  --color-terracotta-50: #FEF7F3;
+
+  --color-cream: #FBF6EF;
+  --color-cream-card: #FFFFFF;
+  --color-cream-surface: #F5EFE5;
+  --color-cream-border: #EADBCE;
+
+  --color-salvia: #8FA998;
+  --color-salvia-dark: #65826E;
+  --color-salvia-light: #F0F5F2;
+
+  --color-miele: #E8B84B;
+  --color-miele-dark: #B8881A;
+  --color-miele-light: #FEF9EE;
+
+  --color-mattone: #C4644F;
+  --color-mattone-dark: #A54B37;
+  --color-mattone-light: #FAF1EF;
+
+  --color-text-main: #2C3E42;
+  --color-text-muted: #5C747A;
+  --color-text-subtle: #879EA3;
+
+  /* Remapping standard utility scales so existing classes adopt the custom palette smoothly */
+  --color-indigo-50: #EEF4F6;
+  --color-indigo-100: #DEE9ED;
+  --color-indigo-200: #BED3DC;
+  --color-indigo-300: #97B7C3;
+  --color-indigo-400: #628E9E;
+  --color-indigo-500: #4B7889;
+  --color-indigo-600: #3D6B7D; /* Primario: Blu petrolio morbido */
+  --color-indigo-700: #2C5260; /* Petrolio scuro per hover */
+  --color-indigo-800: #213E49;
+  --color-indigo-900: #172C34;
+
+  --color-slate-50: #FBF6EF; /* Sfondo: Crema/avorio caldo */
+  --color-slate-100: #F5EFE5; /* Superfici leggermente più scure del crema */
+  --color-slate-200: #EADBCE; /* Bordi caldi raffinati */
+  --color-slate-300: #D8C7B5;
+  --color-slate-400: #9BA9AD;
+  --color-slate-500: #6D8287;
+  --color-slate-600: #4F656B;
+  --color-slate-700: #3C4F54;
+  --color-slate-800: #324347;
+  --color-slate-900: #2C3E42; /* Testo principale: Grigio-blu scuro */
+
+  --color-emerald-50: #F0F5F2; /* Salvia tenue */
+  --color-emerald-100: #DFEBE3;
+  --color-emerald-200: #C2DBCB;
+  --color-emerald-500: #8FA998; /* Verde salvia */
+  --color-emerald-600: #6F8F79; /* Verde salvia solido e leggibile */
+  --color-emerald-700: #55725E;
+  --color-emerald-800: #3F5546;
+
+  --color-rose-50: #FAF1EF; /* Mattone tenue */
+  --color-rose-100: #F6E2DD;
+  --color-rose-200: #EAC4BB;
+  --color-rose-500: #C4644F; /* Rosso mattone tenue */
+  --color-rose-600: #B2533F; /* Mattone solido leggibile */
+  --color-rose-700: #8F3E2C;
+  --color-rose-800: #6E2D1F;
+
+  --color-amber-50: #FEF9EE; /* Miele tenue */
+  --color-amber-100: #FDF2D7;
+  --color-amber-200: #FBE2A9;
+  --color-amber-500: #E8B84B; /* Giallo miele */
+  --color-amber-600: #D39D26; /* Miele solido leggibile */
+  --color-amber-700: #A87714;
+  --color-amber-800: #7F5809;
+}
+
+@layer base {
+  body {
+    background-color: #FBF6EF;
+    color: #2C3E42;
+  }
+  * {
+    border-color: #EADBCE;
+  }
+}
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .print-break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .print-page-break {
+    page-break-before: always;
+    break-before: page;
+  }
+}

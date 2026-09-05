@@ -1,0 +1,8 @@
+{
+  "name": "Registro Scolastico e Docenti",
+  "description": "Registro di classe con gestione presenze, calendario lezioni, diario progressi e compiti, schede alunno con teoria musicale, valutazioni periodiche quadrimestrali e generazione report PDF personalizzabili con grafici per istituti multipli.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
