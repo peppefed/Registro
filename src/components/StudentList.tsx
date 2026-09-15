@@ -15,6 +15,7 @@ import {
   LayoutGrid,
   List as ListIcon,
   CheckCircle,
+  Clock,
 } from 'lucide-react';
 
 interface Props {
@@ -201,15 +202,26 @@ export const StudentList: React.FC<Props> = ({
                     </div>
                   </div>
 
-                  {/* Teoria Musicale pill */}
-                  <div className="mt-3">
+                  {/* Orario e Teoria Musicale pills */}
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                    {student.lessonDay ? (
+                      <div className="inline-flex items-center gap-1.5 rounded-lg bg-teal-50 px-2.5 py-1 text-[11px] font-semibold text-petrol border border-teal-200">
+                        <Clock className="h-3 w-3 text-petrol" />
+                        <span className="capitalize">{student.lessonDay} {student.lessonStartTime ? `${student.lessonStartTime}` : ''}</span>
+                      </div>
+                    ) : (
+                      <div className="inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2 py-0.5 text-[10px] text-slate-400 border border-slate-200">
+                        <span>Orario non imp.</span>
+                      </div>
+                    )}
+
                     {student.attendsMusicTheory ? (
                       <div className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-800 border border-amber-200">
                         <Music className="h-3.5 w-3.5 text-amber-600" />
                         <span>Teoria: {student.musicTheoryTeacher || 'Iscritto'}</span>
                       </div>
                     ) : (
-                      <div className="inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2.5 py-1 text-[11px] text-slate-400 border border-slate-100">
+                      <div className="inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2 py-0.5 text-[10px] text-slate-400 border border-slate-100">
                         <span>Senza Teoria</span>
                       </div>
                     )}

@@ -8,6 +8,7 @@ import {
   Database,
   ChevronDown,
   BookOpen,
+  Clock,
 } from 'lucide-react';
 
 interface Props {
@@ -16,8 +17,8 @@ interface Props {
   onSelectSchool: (id: string) => void;
   onOpenSchoolManager: () => void;
   onOpenBackupModal: () => void;
-  activeMainTab: 'alunni' | 'appello' | 'statistiche';
-  onChangeMainTab: (tab: 'alunni' | 'appello' | 'statistiche') => void;
+  activeMainTab: 'alunni' | 'orario' | 'appello' | 'statistiche';
+  onChangeMainTab: (tab: 'alunni' | 'orario' | 'appello' | 'statistiche') => void;
   totalStudentsInActiveSchool: number;
 }
 
@@ -132,6 +133,18 @@ export const Navbar: React.FC<Props> = ({
             </button>
 
             <button
+              onClick={() => onChangeMainTab('orario')}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                activeMainTab === 'orario'
+                  ? 'bg-white text-[#2C6E63] shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              Orario & Giornata
+            </button>
+
+            <button
               onClick={() => onChangeMainTab('appello')}
               className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
                 activeMainTab === 'appello'
@@ -171,18 +184,26 @@ export const Navbar: React.FC<Props> = ({
         </div>
 
         {/* Mobile Navigation bar */}
-        <div className="flex md:hidden py-2 border-t border-slate-100 justify-around text-xs font-bold">
+        <div className="flex md:hidden py-2 border-t border-slate-100 justify-around text-xs font-bold overflow-x-auto">
           <button
             onClick={() => onChangeMainTab('alunni')}
-            className={`flex items-center gap-1 py-1 px-2.5 rounded-lg ${
+            className={`flex items-center gap-1 py-1 px-2.5 rounded-lg whitespace-nowrap ${
               activeMainTab === 'alunni' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500'
             }`}
           >
             <Users className="h-3.5 w-3.5" /> Alunni
           </button>
           <button
+            onClick={() => onChangeMainTab('orario')}
+            className={`flex items-center gap-1 py-1 px-2.5 rounded-lg whitespace-nowrap ${
+              activeMainTab === 'orario' ? 'bg-teal-50 text-[#2C6E63]' : 'text-slate-500'
+            }`}
+          >
+            <Clock className="h-3.5 w-3.5" /> Orario
+          </button>
+          <button
             onClick={() => onChangeMainTab('appello')}
-            className={`flex items-center gap-1 py-1 px-2.5 rounded-lg ${
+            className={`flex items-center gap-1 py-1 px-2.5 rounded-lg whitespace-nowrap ${
               activeMainTab === 'appello' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500'
             }`}
           >
@@ -190,7 +211,7 @@ export const Navbar: React.FC<Props> = ({
           </button>
           <button
             onClick={() => onChangeMainTab('statistiche')}
-            className={`flex items-center gap-1 py-1 px-2.5 rounded-lg ${
+            className={`flex items-center gap-1 py-1 px-2.5 rounded-lg whitespace-nowrap ${
               activeMainTab === 'statistiche' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500'
             }`}
           >

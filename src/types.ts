@@ -10,6 +10,18 @@ export interface School {
   notes?: string;
 }
 
+export type DayOfWeek = 'lunedi' | 'martedi' | 'mercoledi' | 'giovedi' | 'venerdi' | 'sabato' | 'domenica';
+
+export interface WeeklyScheduleSlot {
+  id: string;
+  day: DayOfWeek;
+  startTime: string; // e.g. "14:30"
+  endTime: string;   // e.g. "15:15"
+  room?: string;      // e.g. "Aula 3"
+  subject?: string;   // e.g. "Pianoforte Individuale"
+  notes?: string;
+}
+
 export interface Student {
   id: string;
   schoolId: string;
@@ -24,6 +36,12 @@ export interface Student {
   phone?: string;
   notes?: string;
   enrollmentDate: string;
+  // Weekly Lesson Schedule
+  lessonDay?: DayOfWeek;
+  lessonStartTime?: string; // e.g. "15:00"
+  lessonEndTime?: string;   // e.g. "15:45"
+  lessonRoom?: string;      // e.g. "Aula 2"
+  additionalSlots?: WeeklyScheduleSlot[];
 }
 
 export interface AttendanceRecord {

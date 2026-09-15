@@ -301,6 +301,15 @@ export const StudentDetailView: React.FC<Props> = ({
             <div className="mt-1 flex flex-wrap items-center gap-x-4 text-xs text-slate-500">
               <span>🏫 {school.name}</span>
               <span>🎓 {student.level} ({student.academicYear})</span>
+              {student.lessonDay && (
+                <span className="text-petrol font-semibold inline-flex items-center gap-1 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+                  <Clock className="h-3.5 w-3.5" />
+                  <span className="capitalize">{student.lessonDay}</span>
+                  {student.lessonStartTime ? ` ore ${student.lessonStartTime}` : ''}
+                  {student.lessonEndTime ? ` - ${student.lessonEndTime}` : ''}
+                  {student.lessonRoom ? ` (${student.lessonRoom})` : ''}
+                </span>
+              )}
               {student.attendsMusicTheory ? (
                 <span className="text-amber-700 font-medium inline-flex items-center gap-1">
                   <Music className="h-3.5 w-3.5" /> Teoria: {student.musicTheoryTeacher || 'Sì'}

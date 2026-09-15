@@ -2,6 +2,7 @@ import {
   School,
   Student,
   AttendanceRecord,
+  AttendanceStatus,
   LessonEntry,
   PeriodicEvaluation,
   IntermediateTest,
@@ -87,6 +88,10 @@ const INITIAL_STUDENTS: Student[] = [
     phone: '+39 347 1234567',
     notes: 'Ottima predisposizione musicale, buona disciplina nello studio.',
     enrollmentDate: '2024-09-15',
+    lessonDay: 'lunedi',
+    lessonStartTime: '15:00',
+    lessonEndTime: '15:50',
+    lessonRoom: 'Aula 3 (Pianoforte)',
   },
   {
     id: 'stud-2',
@@ -102,6 +107,10 @@ const INITIAL_STUDENTS: Student[] = [
     phone: '+39 348 2345678',
     notes: 'Preparazione per concorsi giovanili di musica da camera.',
     enrollmentDate: '2023-09-10',
+    lessonDay: 'lunedi',
+    lessonStartTime: '16:00',
+    lessonEndTime: '16:50',
+    lessonRoom: 'Aula 1 (Archi)',
   },
   {
     id: 'stud-3',
@@ -116,6 +125,10 @@ const INITIAL_STUDENTS: Student[] = [
     phone: '+39 340 9876543',
     notes: 'Primo approccio allo strumento, molto motivato.',
     enrollmentDate: '2025-09-20',
+    lessonDay: 'mercoledi',
+    lessonStartTime: '15:15',
+    lessonEndTime: '16:00',
+    lessonRoom: 'Aula 4 (Chitarra)',
   },
   {
     id: 'stud-4',
@@ -131,6 +144,10 @@ const INITIAL_STUDENTS: Student[] = [
     phone: '+39 339 5544332',
     notes: 'Suono pulito, lavorare su respirazione e appoggio diaframmatico.',
     enrollmentDate: '2024-09-18',
+    lessonDay: 'mercoledi',
+    lessonStartTime: '16:15',
+    lessonEndTime: '17:00',
+    lessonRoom: 'Aula 2 (Fiati)',
   },
   {
     id: 'stud-5',
@@ -460,6 +477,9 @@ export const StorageService = {
     if (schoolId) all = all.filter((a) => a.schoolId === schoolId);
     return all;
   },
+  getAttendanceForDate(date: string, schoolId?: string): AttendanceRecord[] {
+    return this.getAttendance(undefined, schoolId).filter((a) => a.date === date);
+  },
   saveAttendance(records: AttendanceRecord[]): void {
     setJson(STORAGE_KEYS.ATTENDANCE, records);
     notifyChange();
@@ -476,10 +496,24 @@ export const StorageService = {
     }
     this.saveAttendance(all);
   },
+  setAttendance(studentId: string, schoolId: string, date: string, status: AttendanceStatus): void {
+    const record: AttendanceRecord = {
+      id: `att-${studentId}-${date}`,
+      studentId,
+      schoolId,
+      date,
+      status,
+    };
+    this.recordAttendance(record);
+  },
   removeAttendance(studentId: string, date: string): void {
     const all = this.getAttendance().filter(
       (a) => !(a.studentId === studentId && a.date === date)
     );
+    this.saveAttendance(all);
+  },
+  deleteAttendance(id: string): void {
+    const all = this.getAttendance().filter((a) => a.id !== id);
     this.saveAttendance(all);
   },
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Student } from '../types';
-import { X, UserPlus, Music, GraduationCap } from 'lucide-react';
+import { Student, DayOfWeek } from '../types';
+import { X, UserPlus, Music, GraduationCap, Clock } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -9,6 +9,16 @@ interface Props {
   schoolId: string;
   studentToEdit?: Student | null;
 }
+
+const DAYS_OF_WEEK: { value: DayOfWeek; label: string }[] = [
+  { value: 'lunedi', label: 'Lunedì' },
+  { value: 'martedi', label: 'Martedì' },
+  { value: 'mercoledi', label: 'Mercoledì' },
+  { value: 'giovedi', label: 'Giovedì' },
+  { value: 'venerdi', label: 'Venerdì' },
+  { value: 'sabato', label: 'Sabato' },
+  { value: 'domenica', label: 'Domenica' },
+];
 
 const COMMON_LEVELS = ['Propedeutico', 'Base', 'Intermedio', 'Avanzato', 'Grado 1', 'Grado 2', 'Grado 3', 'Grado 4', 'Grado 5'];
 const COMMON_YEARS = ['1° Anno', '2° Anno', '3° Anno', '4° Anno', '5° Anno'];
@@ -45,6 +55,10 @@ export const StudentModal: React.FC<Props> = ({
     email: '',
     phone: '',
     notes: '',
+    lessonDay: undefined,
+    lessonStartTime: '',
+    lessonEndTime: '',
+    lessonRoom: '',
   });
 
   useEffect(() => {
@@ -62,6 +76,10 @@ export const StudentModal: React.FC<Props> = ({
         email: '',
         phone: '',
         notes: '',
+        lessonDay: undefined,
+        lessonStartTime: '',
+        lessonEndTime: '',
+        lessonRoom: '',
       });
     }
   }, [studentToEdit, isOpen]);
@@ -88,6 +106,10 @@ export const StudentModal: React.FC<Props> = ({
       email: formData.email?.trim() || '',
       phone: formData.phone?.trim() || '',
       notes: formData.notes?.trim() || '',
+      lessonDay: formData.lessonDay || undefined,
+      lessonStartTime: formData.lessonStartTime?.trim() || undefined,
+      lessonEndTime: formData.lessonEndTime?.trim() || undefined,
+      lessonRoom: formData.lessonRoom?.trim() || undefined,
       enrollmentDate: studentToEdit?.enrollmentDate || new Date().toISOString().split('T')[0],
     };
 
@@ -206,6 +228,83 @@ export const StudentModal: React.FC<Props> = ({
                   <option key={ins} value={ins} />
                 ))}
               </datalist>
+            </div>
+          </div>
+
+          {/* Orario Lezione Settimanale */}
+          <div className="rounded-xl border border-teal-200/80 bg-teal-50/40 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-petrol" />
+              <span className="text-sm font-semibold text-slate-800">
+                Orario Lezione Settimanale (per Tabellone e Giornata)
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Giorno
+                </label>
+                <select
+                  value={formData.lessonDay || ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      lessonDay: (e.target.value as DayOfWeek) || undefined,
+                    })
+                  }
+                  className="w-full rounded-lg border border-teal-300 bg-white px-2.5 py-2 text-sm text-slate-900 focus:border-petrol focus:ring-1 focus:ring-petrol outline-none"
+                >
+                  <option value="">-- Non impostato --</option>
+                  {DAYS_OF_WEEK.map((d) => (
+                    <option key={d.value} value={d.value}>
+                      {d.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Inizio (es. 15:00)
+                </label>
+                <input
+                  type="time"
+                  value={formData.lessonStartTime || ''}
+                  onChange={(e) =>
+                    setFormData({ ...formData, lessonStartTime: e.target.value })
+                  }
+                  className="w-full rounded-lg border border-teal-300 bg-white px-2.5 py-2 text-sm text-slate-900 focus:border-petrol focus:ring-1 focus:ring-petrol outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Fine (es. 15:45)
+                </label>
+                <input
+                  type="time"
+                  value={formData.lessonEndTime || ''}
+                  onChange={(e) =>
+                    setFormData({ ...formData, lessonEndTime: e.target.value })
+                  }
+                  className="w-full rounded-lg border border-teal-300 bg-white px-2.5 py-2 text-sm text-slate-900 focus:border-petrol focus:ring-1 focus:ring-petrol outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Aula / Sala
+                </label>
+                <input
+                  type="text"
+                  value={formData.lessonRoom || ''}
+                  onChange={(e) =>
+                    setFormData({ ...formData, lessonRoom: e.target.value })
+                  }
+                  placeholder="es. Aula 3"
+                  className="w-full rounded-lg border border-teal-300 bg-white px-2.5 py-2 text-sm text-slate-900 focus:border-petrol focus:ring-1 focus:ring-petrol outline-none"
+                />
+              </div>
             </div>
           </div>
 

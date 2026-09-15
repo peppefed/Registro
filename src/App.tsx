@@ -7,6 +7,7 @@ import { StudentDetailView } from './components/StudentDetailView';
 import { StudentModal } from './components/StudentModal';
 import { SchoolManagerModal } from './components/SchoolManagerModal';
 import { ClassRegisterView } from './components/ClassRegisterView';
+import { ScheduleView } from './components/ScheduleView';
 import { MonthlyReportsView } from './components/MonthlyReportsView';
 import { DatabaseBackupModal } from './components/DatabaseBackupModal';
 
@@ -25,7 +26,7 @@ export default function App() {
   });
 
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [activeMainTab, setActiveMainTab] = useState<'alunni' | 'appello' | 'statistiche'>('alunni');
+  const [activeMainTab, setActiveMainTab] = useState<'alunni' | 'orario' | 'appello' | 'statistiche'>('alunni');
 
   // Modals
   const [isSchoolManagerOpen, setIsSchoolManagerOpen] = useState(false);
@@ -136,6 +137,15 @@ export default function App() {
                 onAddStudent={handleOpenAddStudent}
                 onEditStudent={handleOpenEditStudent}
                 onDeleteStudent={handleDeleteStudent}
+              />
+            )}
+
+            {activeMainTab === 'orario' && (
+              <ScheduleView
+                school={activeSchool}
+                students={activeStudents}
+                onSelectStudent={(s) => setSelectedStudent(s)}
+                onEditStudent={handleOpenEditStudent}
               />
             )}
 
