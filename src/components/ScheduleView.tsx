@@ -31,6 +31,7 @@ import {
   Tag,
   Info,
   Layers,
+  CheckSquare,
 } from 'lucide-react';
 
 interface Props {
@@ -166,8 +167,10 @@ export const ScheduleView: React.FC<Props> = ({
   const [dayModalTitle, setDayModalTitle] = useState<string>('');
   const [dayModalNotes, setDayModalNotes] = useState<string>('');
 
-  // Modal for adding a specific lesson on a date
+  // Modal for adding / editing a specific lesson on a date
   const [isAddLessonModalOpen, setIsAddLessonModalOpen] = useState(false);
+  const [editingLesson, setEditingLesson] = useState<ScheduledLesson | null>(null);
+  const [addLessonDate, setAddLessonDate] = useState<string>(todayIso);
   const [addLessonStudentId, setAddLessonStudentId] = useState<string>('');
   const [addLessonStartTime, setAddLessonStartTime] = useState<string>('15:00');
   const [addLessonEndTime, setAddLessonEndTime] = useState<string>('15:45');
@@ -269,75 +272,158 @@ export const ScheduleView: React.FC<Props> = ({
     setDayModalDate(null);
   };
 
-  // Quick action: Generate lesson days for the current month based on students' regular days
-  const handleGenerateMonthDays = () => {
-    if (!school) return;
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-    const activeStudentDays = new Set(students.map((s) => s.lessonDay).filter(Boolean));
-
-    let addedCount = 0;
-    for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
-      const d = new Date(currentYear, currentMonth, dayNum);
-      const iso = formatDateToIso(d);
-      const italianDay = getItalianDayOfWeek(d);
-
-      // Only generate if students have lessons on this weekday and date is not already marked
-      if (activeStudentDays.has(italianDay) && !calendarDayMap[iso]) {
-        StorageService.upsertCalendarDay({
-          id: `cal-${school.id}-${iso}`,
-          schoolId: school.id,
-          date: iso,
-          type: 'lezione',
-          title: `Lezioni di ${DAYS_OF_WEEK.find((x) => x.id === italianDay)?.name}`,
-        });
-        addedCount++;
-      }
-    }
-    setCalendarDays(StorageService.getCalendarDays(school.id));
-    alert(`Inserite ${addedCount} giornate di lezione per ${MONTH_NAMES[currentMonth]} ${currentYear}.`);
+  // Open modal to add a new lesson for a date
+  const handleOpenAddLesson = (date?: string) => {
+    const targetDate = date || selectedDateStr;
+    setEditingLesson(null);
+    setAddLessonDate(targetDate);
+    setAddLessonStudentId('');
+    setAddLessonStartTime('15:00');
+    setAddLessonEndTime('15:45');
+    setAddLessonRoom('');
+    setAddLessonIsRecupero(false);
+    setAddLessonNotes('');
+    setIsAddLessonModalOpen(true);
   };
 
-  // Save an individual scheduled lesson (recupero / lezione specifica)
+  // Open modal to edit an existing scheduled lesson
+  const handleOpenEditLesson = (lesson: ScheduledLesson) => {
+    setEditingLesson(lesson);
+    setAddLessonDate(lesson.date);
+    setAddLessonStudentId(lesson.studentId);
+    setAddLessonStartTime(lesson.startTime);
+    setAddLessonEndTime(lesson.endTime || '');
+    setAddLessonRoom(lesson.room || '');
+    setAddLessonIsRecupero(lesson.isRecupero ?? false);
+    setAddLessonNotes(lesson.notes || '');
+    setIsAddLessonModalOpen(true);
+  };
+
+  // Save an individual scheduled lesson (create new or update existing)
   const handleSaveScheduledLesson = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!school || !addLessonStudentId) return;
+    if (!school || !addLessonStudentId || !addLessonDate) return;
 
-    const newLesson: ScheduledLesson = {
-      id: `sched-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      schoolId: school.id,
-      studentId: addLessonStudentId,
-      date: selectedDateStr,
-      startTime: addLessonStartTime,
-      endTime: addLessonEndTime || undefined,
-      room: addLessonRoom.trim() || undefined,
-      isRecupero: addLessonIsRecupero,
-      notes: addLessonNotes.trim() || undefined,
-    };
+    if (editingLesson) {
+      const updated: ScheduledLesson = {
+        ...editingLesson,
+        studentId: addLessonStudentId,
+        date: addLessonDate,
+        startTime: addLessonStartTime,
+        endTime: addLessonEndTime || undefined,
+        room: addLessonRoom.trim() || undefined,
+        isRecupero: addLessonIsRecupero,
+        notes: addLessonNotes.trim() || undefined,
+      };
+      StorageService.upsertScheduledLesson(updated);
+    } else {
+      const newLesson: ScheduledLesson = {
+        id: `sched-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        schoolId: school.id,
+        studentId: addLessonStudentId,
+        date: addLessonDate,
+        startTime: addLessonStartTime,
+        endTime: addLessonEndTime || undefined,
+        room: addLessonRoom.trim() || undefined,
+        isRecupero: addLessonIsRecupero,
+        notes: addLessonNotes.trim() || undefined,
+      };
+      StorageService.upsertScheduledLesson(newLesson);
+    }
 
-    StorageService.upsertScheduledLesson(newLesson);
     setScheduledLessons(StorageService.getScheduledLessons(school.id));
 
-    // Also ensure this date is marked as at least a lesson day if not already
-    if (!calendarDayMap[selectedDateStr]) {
+    // Ensure this date is marked in the calendar as a lesson day if not already marked
+    if (!calendarDayMap[addLessonDate]) {
       StorageService.upsertCalendarDay({
-        id: `cal-${school.id}-${selectedDateStr}`,
+        id: `cal-${school.id}-${addLessonDate}`,
         schoolId: school.id,
-        date: selectedDateStr,
+        date: addLessonDate,
         type: addLessonIsRecupero ? 'recupero' : 'lezione',
         title: addLessonIsRecupero ? 'Lezione di Recupero' : 'Giornata di Lezione',
       });
       setCalendarDays(StorageService.getCalendarDays(school.id));
     }
 
+    if (addLessonDate !== selectedDateStr) {
+      setSelectedDateStr(addLessonDate);
+    }
+
     setIsAddLessonModalOpen(false);
+    setEditingLesson(null);
     setAddLessonStudentId('');
     setAddLessonNotes('');
   };
 
+  // Delete a scheduled lesson
   const handleDeleteScheduledLesson = (id: string) => {
+    if (!confirm('Sei sicuro di voler eliminare questa lezione da questa giornata?')) return;
     StorageService.deleteScheduledLesson(id);
     if (school) {
-      setScheduledLessons(StorageService.getScheduledLessons(school.id));
+      const remaining = StorageService.getScheduledLessons(school.id);
+      setScheduledLessons(remaining);
+      const remainingOnDate = remaining.filter((l) => l.date === selectedDateStr);
+      if (remainingOnDate.length === 0 && calendarDayMap[selectedDateStr]?.type === 'lezione') {
+        StorageService.removeCalendarDay(school.id, selectedDateStr);
+        setCalendarDays(StorageService.getCalendarDays(school.id));
+      }
+    }
+  };
+
+  // Quick insert a registered student to this day
+  const handleQuickAddStudent = (student: Student) => {
+    if (!school) return;
+    const newLesson: ScheduledLesson = {
+      id: `sched-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      schoolId: school.id,
+      studentId: student.id,
+      date: selectedDateStr,
+      startTime: student.lessonStartTime || '15:00',
+      endTime: student.lessonEndTime || undefined,
+      room: student.lessonRoom || undefined,
+      isRecupero: false,
+    };
+    StorageService.upsertScheduledLesson(newLesson);
+    setScheduledLessons(StorageService.getScheduledLessons(school.id));
+
+    if (!calendarDayMap[selectedDateStr]) {
+      StorageService.upsertCalendarDay({
+        id: `cal-${school.id}-${selectedDateStr}`,
+        schoolId: school.id,
+        date: selectedDateStr,
+        type: 'lezione',
+        title: 'Giornata di Lezione',
+      });
+      setCalendarDays(StorageService.getCalendarDays(school.id));
+    }
+  };
+
+  // Quick insert all regular students of this weekday to selectedDateStr
+  const handleAddAllRegularStudentsForDay = () => {
+    if (!school || unaddedRegularStudents.length === 0) return;
+    unaddedRegularStudents.forEach((st) => {
+      StorageService.upsertScheduledLesson({
+        id: `sched-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        schoolId: school.id,
+        studentId: st.id,
+        date: selectedDateStr,
+        startTime: st.lessonStartTime || '15:00',
+        endTime: st.lessonEndTime || undefined,
+        room: st.lessonRoom || undefined,
+        isRecupero: false,
+      });
+    });
+    setScheduledLessons(StorageService.getScheduledLessons(school.id));
+
+    if (!calendarDayMap[selectedDateStr]) {
+      StorageService.upsertCalendarDay({
+        id: `cal-${school.id}-${selectedDateStr}`,
+        schoolId: school.id,
+        date: selectedDateStr,
+        type: 'lezione',
+        title: 'Giornata di Lezione',
+      });
+      setCalendarDays(StorageService.getCalendarDays(school.id));
     }
   };
 
@@ -356,68 +442,53 @@ export const ScheduleView: React.FC<Props> = ({
 
   const selectedDayConfig = calendarDayMap[selectedDateStr];
 
-  // Lessons for selected date: regular recurring lessons matching that day of week + specific scheduled lessons
+  // Regular students registered for this weekday (used for quick-add suggestions only)
+  const regularStudentsForDay = useMemo(() => {
+    return students.filter((s) => s.lessonDay === selectedItalianDay);
+  }, [students, selectedItalianDay]);
+
+  // Regular students that have NOT yet been scheduled for this date
+  const unaddedRegularStudents = useMemo(() => {
+    const scheduledStudentIds = new Set(
+      scheduledLessons.filter((l) => l.date === selectedDateStr).map((l) => l.studentId)
+    );
+    return regularStudentsForDay.filter((s) => !scheduledStudentIds.has(s.id));
+  }, [regularStudentsForDay, scheduledLessons, selectedDateStr]);
+
+  // Lessons for selected date: ONLY explicitly added / scheduled lessons
   const lessonsForSelectedDate = useMemo(() => {
-    // 1. Regular weekly students for this weekday
     const list: Array<{
       student: Student;
       startTime: string;
       endTime?: string;
       room?: string;
-      isRecupero?: boolean;
-      customScheduledId?: string;
+      isRecupero: boolean;
+      customScheduledId: string;
+      notes?: string;
+      scheduledLesson: ScheduledLesson;
     }> = [];
 
-    // If day is marked as festivo or sospensione, don't show regular schedule unless user created explicit recuperi
-    const isSuspended = selectedDayConfig?.type === 'festivo' || selectedDayConfig?.type === 'sospensione';
-
-    if (!isSuspended) {
-      students.forEach((student) => {
+    scheduledLessons
+      .filter((sl) => sl.date === selectedDateStr)
+      .forEach((sl) => {
+        const student = students.find((s) => s.id === sl.studentId);
+        if (!student) return;
         if (filterInstrument !== 'all' && student.instrument !== filterInstrument) return;
 
-        if (student.lessonDay === selectedItalianDay) {
-          list.push({
-            student,
-            startTime: student.lessonStartTime || '15:00',
-            endTime: student.lessonEndTime,
-            room: student.lessonRoom,
-            isRecupero: false,
-          });
-        }
-      });
-    }
-
-    // 2. Add extra scheduled lessons for this date
-    scheduledLessons.filter((sl) => sl.date === selectedDateStr).forEach((sl) => {
-      const student = students.find((s) => s.id === sl.studentId);
-      if (!student) return;
-      if (filterInstrument !== 'all' && student.instrument !== filterInstrument) return;
-
-      // Check if student already in list for regular slot; if so, this can be an override or extra
-      const existingIdx = list.findIndex((x) => x.student.id === sl.studentId && !x.customScheduledId);
-      if (existingIdx >= 0) {
-        list[existingIdx] = {
-          student,
-          startTime: sl.startTime,
-          endTime: sl.endTime,
-          room: sl.room || list[existingIdx].room,
-          isRecupero: sl.isRecupero ?? true,
-          customScheduledId: sl.id,
-        };
-      } else {
         list.push({
           student,
           startTime: sl.startTime,
           endTime: sl.endTime,
           room: sl.room || student.lessonRoom,
-          isRecupero: sl.isRecupero ?? true,
+          isRecupero: sl.isRecupero ?? false,
           customScheduledId: sl.id,
+          notes: sl.notes,
+          scheduledLesson: sl,
         });
-      }
-    });
+      });
 
     return list.sort((a, b) => a.startTime.localeCompare(b.startTime));
-  }, [students, selectedItalianDay, selectedDayConfig, scheduledLessons, selectedDateStr, filterInstrument]);
+  }, [students, scheduledLessons, selectedDateStr, filterInstrument]);
 
   // Calendar grid computation
   const calendarMonthGrid = useMemo(() => {
@@ -457,14 +528,10 @@ export const ScheduleView: React.FC<Props> = ({
     for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
       const d = new Date(currentYear, currentMonth, dayNum);
       const iso = formatDateToIso(d);
-      const italianDay = getItalianDayOfWeek(d);
 
-      // Count students that have lessons this day of week + extra scheduled
-      const regCount = students.filter((s) => s.lessonDay === italianDay).length;
-      const extraCount = scheduledLessons.filter((s) => s.date === iso).length;
+      // ONLY count explicitly scheduled lessons on this date
+      const effectiveCount = scheduledLessons.filter((s) => s.date === iso).length;
       const calDay = calendarDayMap[iso];
-
-      const effectiveCount = (calDay?.type === 'festivo' || calDay?.type === 'sospensione') ? extraCount : (regCount + extraCount);
 
       days.push({
         dateStr: iso,
@@ -492,7 +559,7 @@ export const ScheduleView: React.FC<Props> = ({
     }
 
     return days;
-  }, [currentYear, currentMonth, calendarDayMap, students, scheduledLessons, todayIso]);
+  }, [currentYear, currentMonth, calendarDayMap, scheduledLessons, todayIso]);
 
   // Instruments list
   const instruments = useMemo(() => {
@@ -503,17 +570,23 @@ export const ScheduleView: React.FC<Props> = ({
     return Array.from(set).sort();
   }, [students]);
 
-  // Month stats
+  // Month stats (based strictly on explicitly scheduled lessons and configured calendar days)
   const monthStats = useMemo(() => {
     const prefix = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+    const lessonsThisMonth = scheduledLessons.filter((l) => l.date.startsWith(prefix));
     const daysThisMonth = calendarDays.filter((d) => d.date.startsWith(prefix));
-    const countLezioni = daysThisMonth.filter((d) => d.type === 'lezione').length;
-    const countRecuperi = daysThisMonth.filter((d) => d.type === 'recupero').length;
+    const countRecuperi = lessonsThisMonth.filter((l) => l.isRecupero).length;
     const countSaggi = daysThisMonth.filter((d) => d.type === 'saggio').length;
     const countFestivi = daysThisMonth.filter((d) => d.type === 'festivo' || d.type === 'sospensione').length;
 
-    return { countLezioni, countRecuperi, countSaggi, countFestivi, totalMarked: daysThisMonth.length };
-  }, [calendarDays, currentYear, currentMonth]);
+    return {
+      totalLessons: lessonsThisMonth.length,
+      countRecuperi,
+      countSaggi,
+      countFestivi,
+      totalMarked: daysThisMonth.length,
+    };
+  }, [calendarDays, scheduledLessons, currentYear, currentMonth]);
 
   const handlePrevMonth = () => {
     if (currentMonth === 0) {
@@ -652,21 +725,22 @@ export const ScheduleView: React.FC<Props> = ({
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
-                onClick={handleGenerateMonthDays}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-teal-50 border border-teal-200/80 px-3 py-1.5 text-xs font-bold text-petrol hover:bg-teal-100 transition cursor-pointer"
-                title="Genera automaticamente le giornate di lezione in base ai giorni settimanali degli alunni"
+                onClick={() => handleOpenAddLesson(selectedDateStr)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-petrol px-3.5 py-1.5 text-xs font-bold text-white hover:bg-[#23584F] transition cursor-pointer shadow-xs"
+                title="Aggiungi una nuova lezione al calendario per il giorno selezionato"
               >
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>Genera Giornate del Mese</span>
+                <Plus className="h-3.5 w-3.5" />
+                <span>+ Aggiungi Lezione</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleOpenDayModal(selectedDateStr)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-petrol px-3 py-1.5 text-xs font-bold text-white hover:bg-[#23584F] transition cursor-pointer shadow-xs"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer shadow-2xs"
+                title="Imposta se la data è una giornata di lezione, festivo o saggio"
               >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Modifica Giorno Selezionato</span>
+                <Tag className="h-3.5 w-3.5 text-slate-500" />
+                <span>Tipo Giornata</span>
               </button>
             </div>
           </div>
@@ -676,7 +750,7 @@ export const ScheduleView: React.FC<Props> = ({
             <span className="text-slate-500 font-semibold mr-1">Riepilogo {MONTH_NAMES[currentMonth]}:</span>
             <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-lg">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              <strong>{monthStats.countLezioni}</strong> Giornate Lezione
+              <strong>{monthStats.totalLessons}</strong> {monthStats.totalLessons === 1 ? 'Lezione Inserita' : 'Lezioni Inserite'}
             </span>
             <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-0.5 rounded-lg">
               <span className="h-2 w-2 rounded-full bg-amber-500" />
@@ -722,7 +796,7 @@ export const ScheduleView: React.FC<Props> = ({
                         : 'hover:bg-slate-50/80'
                     }`}
                   >
-                    {/* Top row: day number & today pill */}
+                    {/* Top row: day number & action buttons */}
                     <div className="flex items-center justify-between">
                       <span
                         className={`text-xs sm:text-sm font-bold rounded-lg h-6 w-6 flex items-center justify-center ${
@@ -736,18 +810,31 @@ export const ScheduleView: React.FC<Props> = ({
                         {cell.dayNumber}
                       </span>
 
-                      {/* Quick Edit badge button on hover */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenDayModal(cell.dateStr);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 text-[10px] text-slate-400 hover:text-petrol transition p-0.5 rounded"
-                        title="Configura tipo giornata"
-                      >
-                        <Edit2 className="h-3 w-3" />
-                      </button>
+                      {/* Quick action buttons on hover */}
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenAddLesson(cell.dateStr);
+                          }}
+                          className="text-slate-400 hover:text-petrol transition p-0.5 rounded hover:bg-teal-50"
+                          title="Aggiungi lezione a questo giorno"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenDayModal(cell.dateStr);
+                          }}
+                          className="text-slate-400 hover:text-petrol transition p-0.5 rounded hover:bg-teal-50"
+                          title="Configura tipo giornata"
+                        >
+                          <Edit2 className="h-3 w-3" />
+                        </button>
+                      </div>
                     </div>
 
                     {/* Middle: Day type tag */}
@@ -761,10 +848,10 @@ export const ScheduleView: React.FC<Props> = ({
                         </div>
                       )}
 
-                      {/* Lesson counter badge */}
+                      {/* Lesson counter badge - only shows if lessons have actually been added */}
                       {cell.lessonsCount > 0 && (
-                        <div className="flex items-center gap-1 text-[10px] font-bold text-petrol">
-                          <Clock className="h-2.5 w-2.5" />
+                        <div className="flex items-center gap-1 text-[10px] font-bold text-petrol bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200/60">
+                          <Clock className="h-2.5 w-2.5 text-petrol" />
                           <span>{cell.lessonsCount} {cell.lessonsCount === 1 ? 'lezione' : 'lezioni'}</span>
                         </div>
                       )}
@@ -802,28 +889,37 @@ export const ScheduleView: React.FC<Props> = ({
                   {selectedDayConfig ? (
                     <span>Contrassegnata come: <strong>{DAY_TYPE_CONFIG[selectedDayConfig.type].label}</strong> {selectedDayConfig.title ? `(${selectedDayConfig.title})` : ''}</span>
                   ) : (
-                    <span>Non ancora contrassegnata in modo speciale. Puoi impostarla come giornata effettiva o aprire il registro.</span>
+                    <span>Nessuna configurazione speciale. Clicca su "+ Aggiungi Lezione" per inserire una lezione.</span>
                   )}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => handleOpenAddLesson(selectedDateStr)}
+                className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-petrol text-white text-xs font-bold hover:bg-[#23584F] transition cursor-pointer shadow-xs"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>+ Aggiungi Lezione</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => handleOpenDayModal(selectedDateStr)}
                 className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-teal-300 bg-white text-xs font-bold text-petrol hover:bg-teal-50 transition cursor-pointer shadow-2xs"
               >
                 <Tag className="h-3.5 w-3.5" />
-                <span>Imposta Tipo Giornata</span>
+                <span>Tipo Giornata</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveSubTab('giornata')}
-                className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-petrol text-white text-xs font-bold hover:bg-[#23584F] transition cursor-pointer shadow-xs"
+                className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-xl border border-petrol/30 bg-teal-50/80 text-petrol text-xs font-bold hover:bg-teal-100 transition cursor-pointer"
               >
-                <span>Vedi Tabellone Giornata</span>
+                <span>Tabellone Giornata</span>
                 <ChevronRight className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -859,7 +955,7 @@ export const ScheduleView: React.FC<Props> = ({
                   )}
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {lessonsForSelectedDate.length} lezioni in programma • Segna l'appello con un tocco o apri il diario dell'alunno
+                  {lessonsForSelectedDate.length} {lessonsForSelectedDate.length === 1 ? 'lezione inserita' : 'lezioni inserite'} • Segna l'appello con un tocco o apri il diario dell'alunno
                 </p>
               </div>
             </div>
@@ -887,11 +983,11 @@ export const ScheduleView: React.FC<Props> = ({
 
               <button
                 type="button"
-                onClick={() => setIsAddLessonModalOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-petrol px-3 py-1.5 text-xs font-bold text-white hover:bg-[#23584F] transition cursor-pointer shadow-xs"
+                onClick={() => handleOpenAddLesson(selectedDateStr)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-petrol px-3.5 py-1.5 text-xs font-bold text-white hover:bg-[#23584F] transition cursor-pointer shadow-xs"
               >
                 <Plus className="h-3.5 w-3.5" />
-                <span>+ Aggiungi Lezione / Recupero</span>
+                <span>+ Aggiungi Lezione</span>
               </button>
             </div>
           </div>
@@ -925,22 +1021,58 @@ export const ScheduleView: React.FC<Props> = ({
 
           {/* List of lessons for the day */}
           {lessonsForSelectedDate.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">
-              <CalendarIcon className="h-10 w-10 text-slate-300 mx-auto mb-2" />
-              <h4 className="text-sm font-bold text-slate-700">
-                Nessuna lezione in programma per {selectedDateStr}
+            <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-8 sm:p-12 text-center">
+              <CalendarIcon className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+              <h4 className="text-base font-bold text-slate-800">
+                Nessuna lezione inserita per {selectedDateStr}
               </h4>
-              <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-4">
-                Non ci sono allievi con orario regolare per questo giorno. Puoi aggiungere una lezione straordinaria o di recupero cliccando qui sotto.
+              <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-5">
+                Il calendario per questa data è vuoto. Le lezioni compaiono solo quando le inserisci. Clicca su "+ Aggiungi Lezione" per programmarne una.
               </p>
-              <button
-                type="button"
-                onClick={() => setIsAddLessonModalOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-petrol px-4 py-2 text-xs font-bold text-white hover:bg-[#23584F] transition cursor-pointer shadow-xs"
-              >
-                <Plus className="h-4 w-4" />
-                <span>Aggiungi Lezione a questa Giornata</span>
-              </button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleOpenAddLesson(selectedDateStr)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-petrol px-4 py-2 text-xs font-bold text-white hover:bg-[#23584F] transition cursor-pointer shadow-xs"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>+ Aggiungi Lezione a questa Giornata</span>
+                </button>
+              </div>
+
+              {/* Quick-add shortcuts from students registry */}
+              {unaddedRegularStudents.length > 0 && (
+                <div className="mt-6 pt-5 border-t border-slate-100 max-w-lg mx-auto">
+                  <span className="text-[11px] font-semibold text-slate-500 block mb-2">
+                    Suggerimento rapido: allievi con orario abituale di {selectedItalianDay} ({unaddedRegularStudents.length}):
+                  </span>
+                  <div className="flex flex-wrap items-center justify-center gap-1.5">
+                    {unaddedRegularStudents.map((st) => (
+                      <button
+                        key={st.id}
+                        type="button"
+                        onClick={() => handleQuickAddStudent(st)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs font-medium text-slate-700 hover:bg-teal-50 hover:text-petrol hover:border-teal-300 transition cursor-pointer"
+                        title={`Aggiungi ${st.lastName} ${st.firstName} (${st.lessonStartTime || '15:00'})`}
+                      >
+                        <Plus className="h-3 w-3 text-petrol" />
+                        <span>{st.lastName} {st.firstName}</span>
+                        {st.lessonStartTime && <span className="text-[10px] text-slate-400">({st.lessonStartTime})</span>}
+                      </button>
+                    ))}
+                    {unaddedRegularStudents.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={handleAddAllRegularStudentsForDay}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-50 border border-teal-200 text-xs font-bold text-petrol hover:bg-teal-100 transition cursor-pointer ml-1"
+                      >
+                        <CheckSquare className="h-3 w-3 text-petrol" />
+                        <span>Aggiungi tutti ({unaddedRegularStudents.length})</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -1004,6 +1136,11 @@ export const ScheduleView: React.FC<Props> = ({
                           {student.attendsMusicTheory && (
                             <span className="text-amber-700 font-medium">
                               Teoria Musicale {student.musicTheoryTeacher ? `(${student.musicTheoryTeacher})` : ''}
+                            </span>
+                          )}
+                          {item.notes && (
+                            <span className="text-slate-600 bg-slate-100 px-2 py-0.5 rounded font-normal">
+                              Nota: {item.notes}
                             </span>
                           )}
                         </div>
@@ -1082,22 +1219,29 @@ export const ScheduleView: React.FC<Props> = ({
                           <span>Diario & Voti</span>
                         </button>
 
-                        {item.customScheduledId && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteScheduledLesson(item.customScheduledId!)}
-                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition cursor-pointer"
-                            title="Rimuovi lezione straordinaria da questo giorno"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditLesson(item.scheduledLesson)}
+                          className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition cursor-pointer"
+                          title="Modifica orario, aula o note di questa lezione"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteScheduledLesson(item.customScheduledId)}
+                          className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition cursor-pointer"
+                          title="Rimuovi lezione da questo giorno"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
 
                         <button
                           type="button"
                           onClick={() => onEditStudent(student)}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
-                          title="Modifica Orario o Dati Alunno"
+                          title="Modifica anagrafica allievo"
                         >
                           <ChevronRight className="h-4 w-4" />
                         </button>
@@ -1287,26 +1431,51 @@ export const ScheduleView: React.FC<Props> = ({
       )}
 
       {/* ============================================================ */}
-      {/* MODAL: AGGIUNGI LEZIONE / RECUPERO AL GIORNO */}
+      {/* MODAL: AGGIUNGI / MODIFICA LEZIONE AL GIORNO */}
       {/* ============================================================ */}
       {isAddLessonModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
           <form onSubmit={handleSaveScheduledLesson} className="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Plus className="h-5 w-5 text-petrol" />
-                Aggiungi Lezione al {selectedDateStr}
+                {editingLesson ? (
+                  <>
+                    <Edit2 className="h-5 w-5 text-petrol" />
+                    <span>Modifica Lezione</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-5 w-5 text-petrol" />
+                    <span>Aggiungi Lezione al Calendario</span>
+                  </>
+                )}
               </h3>
               <button
                 type="button"
-                onClick={() => setIsAddLessonModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1"
+                onClick={() => {
+                  setIsAddLessonModalOpen(false);
+                  setEditingLesson(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
             <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Data Lezione: *
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={addLessonDate}
+                  onChange={(e) => setAddLessonDate(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-petrol"
+                />
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Seleziona Alunno: *
@@ -1317,7 +1486,7 @@ export const ScheduleView: React.FC<Props> = ({
                   onChange={(e) => {
                     setAddLessonStudentId(e.target.value);
                     const s = students.find((st) => st.id === e.target.value);
-                    if (s) {
+                    if (s && !editingLesson) {
                       if (s.lessonStartTime) setAddLessonStartTime(s.lessonStartTime);
                       if (s.lessonEndTime) setAddLessonEndTime(s.lessonEndTime);
                       if (s.lessonRoom) setAddLessonRoom(s.lessonRoom);
@@ -1337,7 +1506,7 @@ export const ScheduleView: React.FC<Props> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Orario Inizio:
+                    Orario Inizio: *
                   </label>
                   <input
                     type="time"
@@ -1403,7 +1572,10 @@ export const ScheduleView: React.FC<Props> = ({
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => setIsAddLessonModalOpen(false)}
+                onClick={() => {
+                  setIsAddLessonModalOpen(false);
+                  setEditingLesson(null);
+                }}
                 className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
               >
                 Annulla
@@ -1412,7 +1584,7 @@ export const ScheduleView: React.FC<Props> = ({
                 type="submit"
                 className="px-4 py-1.5 rounded-xl bg-petrol text-xs font-bold text-white hover:bg-[#23584F] cursor-pointer shadow-xs"
               >
-                Inserisci Lezione
+                {editingLesson ? 'Salva Modifiche' : 'Inserisci Lezione'}
               </button>
             </div>
           </form>
