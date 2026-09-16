@@ -144,6 +144,9 @@ export default function App() {
               <ScheduleView
                 school={activeSchool}
                 students={activeStudents}
+                schools={schools}
+                allStudents={students}
+                onSelectSchool={handleSelectSchool}
                 onSelectStudent={(s) => setSelectedStudent(s)}
                 onEditStudent={handleOpenEditStudent}
               />

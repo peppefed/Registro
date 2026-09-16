@@ -32,13 +32,59 @@ import {
   Info,
   Layers,
   CheckSquare,
+  Users,
+  Building2,
 } from 'lucide-react';
 
 interface Props {
   school: School | null;
   students: Student[];
+  schools?: School[];
+  allStudents?: Student[];
+  onSelectSchool?: (schoolId: string) => void;
   onSelectStudent: (student: Student) => void;
   onEditStudent: (student: Student) => void;
+}
+
+const SCHOOL_THEMES = [
+  {
+    badge: 'bg-teal-50 text-teal-800 border-teal-200',
+    tag: 'bg-teal-600 text-white',
+    dot: 'bg-teal-500',
+    border: 'border-teal-500',
+    light: 'bg-teal-50/50',
+    name: 'Teal',
+  },
+  {
+    badge: 'bg-indigo-50 text-indigo-800 border-indigo-200',
+    tag: 'bg-indigo-600 text-white',
+    dot: 'bg-indigo-500',
+    border: 'border-indigo-500',
+    light: 'bg-indigo-50/50',
+    name: 'Indigo',
+  },
+  {
+    badge: 'bg-amber-50 text-amber-800 border-amber-200',
+    tag: 'bg-amber-600 text-white',
+    dot: 'bg-amber-500',
+    border: 'border-amber-500',
+    light: 'bg-amber-50/50',
+    name: 'Amber',
+  },
+  {
+    badge: 'bg-purple-50 text-purple-800 border-purple-200',
+    tag: 'bg-purple-600 text-white',
+    dot: 'bg-purple-500',
+    border: 'border-purple-500',
+    light: 'bg-purple-50/50',
+    name: 'Purple',
+  },
+];
+
+function getSchoolTheme(schoolId?: string, list?: School[]) {
+  if (!schoolId || !list || list.length === 0) return SCHOOL_THEMES[0];
+  const idx = list.findIndex((s) => s.id === schoolId);
+  return SCHOOL_THEMES[(idx >= 0 ? idx : 0) % SCHOOL_THEMES.length];
 }
 
 const DAYS_OF_WEEK: { id: DayOfWeek; name: string; shortName: string; index: number }[] = [
@@ -129,6 +175,9 @@ function formatDateToIso(d: Date): string {
 export const ScheduleView: React.FC<Props> = ({
   school,
   students,
+  schools,
+  allStudents,
+  onSelectSchool,
   onSelectStudent,
   onEditStudent,
 }) => {
@@ -151,15 +200,47 @@ export const ScheduleView: React.FC<Props> = ({
   // Filter by instrument
   const [filterInstrument, setFilterInstrument] = useState<string>('all');
 
-  // School calendar days from storage
+  // School filter: 'all' = Unified view of all schools, or specific school.id
+  const [selectedSchoolFilter, setSelectedSchoolFilter] = useState<string>('all');
+
+  // Resolve schools and students list
+  const schoolsList = useMemo(() => {
+    if (schools && schools.length > 0) return schools;
+    if (school) return [school];
+    return StorageService.getSchools();
+  }, [schools, school]);
+
+  const allStudentsList = useMemo(() => {
+    if (allStudents && allStudents.length > 0) return allStudents;
+    return StorageService.getStudents();
+  }, [allStudents]);
+
+  // Effective students based on school filter
+  const effectiveStudents = useMemo(() => {
+    if (selectedSchoolFilter === 'all') {
+      return allStudentsList;
+    }
+    return allStudentsList.filter((s) => s.schoolId === selectedSchoolFilter);
+  }, [allStudentsList, selectedSchoolFilter]);
+
+  // School calendar days from storage (all schools loaded)
   const [calendarDays, setCalendarDays] = useState<SchoolCalendarDay[]>(() => {
-    return StorageService.getCalendarDays(school?.id);
+    return StorageService.getCalendarDays();
   });
 
-  // Scheduled lessons (extra/recuperi) from storage
+  // Scheduled lessons from storage (all schools loaded)
   const [scheduledLessons, setScheduledLessons] = useState<ScheduledLesson[]>(() => {
-    return StorageService.getScheduledLessons(school?.id);
+    return StorageService.getScheduledLessons();
   });
+
+  // Filtered scheduled lessons based on selected school
+  const filteredScheduledLessons = useMemo(() => {
+    if (selectedSchoolFilter === 'all') return scheduledLessons;
+    return scheduledLessons.filter((l) => {
+      const student = allStudentsList.find((s) => s.id === l.studentId);
+      return (l.schoolId || student?.schoolId) === selectedSchoolFilter;
+    });
+  }, [scheduledLessons, selectedSchoolFilter, allStudentsList]);
 
   // Modal / drawer state for setting day type
   const [dayModalDate, setDayModalDate] = useState<string | null>(null);
@@ -178,39 +259,62 @@ export const ScheduleView: React.FC<Props> = ({
   const [addLessonIsRecupero, setAddLessonIsRecupero] = useState<boolean>(false);
   const [addLessonNotes, setAddLessonNotes] = useState<string>('');
 
-  // Reload calendar data when school changes or external storage updates
+  // Action feedback banner (e.g. after batch adding lessons)
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+
+  // Modal for generating full month lessons
+  const [isGenerateMonthModalOpen, setIsGenerateMonthModalOpen] = useState(false);
+  const [generateAvoidDuplicates, setGenerateAvoidDuplicates] = useState(true);
+  const [generateSetCalendarDays, setGenerateSetCalendarDays] = useState(true);
+
+  useEffect(() => {
+    if (actionFeedback) {
+      const timer = setTimeout(() => setActionFeedback(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [actionFeedback]);
+
+  // Reload calendar data from StorageService
   useEffect(() => {
     const reload = () => {
-      if (school) {
-        setCalendarDays(StorageService.getCalendarDays(school.id));
-        setScheduledLessons(StorageService.getScheduledLessons(school.id));
-      }
+      setCalendarDays(StorageService.getCalendarDays());
+      setScheduledLessons(StorageService.getScheduledLessons());
     };
     reload();
     return StorageService.subscribe(reload);
+  }, []);
+
+  // When top active school changes externally, align filter if single-school mode
+  useEffect(() => {
+    if (school && selectedSchoolFilter !== 'all' && selectedSchoolFilter !== school.id) {
+      setSelectedSchoolFilter(school.id);
+    }
   }, [school]);
 
   // Load attendance for current selectedDateStr
   useEffect(() => {
-    if (!school) return;
-    const records = StorageService.getAttendanceForDate(selectedDateStr, school.id);
+    const targetSchoolId = selectedSchoolFilter !== 'all' ? selectedSchoolFilter : (school?.id || undefined);
+    const records = StorageService.getAttendanceForDate(selectedDateStr, targetSchoolId);
     const map: Record<string, AttendanceStatus> = {};
     records.forEach((r) => {
       map[r.studentId] = r.status;
     });
     setQuickAttendance(map);
-  }, [selectedDateStr, school]);
+  }, [selectedDateStr, selectedSchoolFilter, school]);
 
   // Quick attendance toggle
   const handleSetAttendance = (studentId: string, status: AttendanceStatus) => {
-    if (!school) return;
+    const student = allStudentsList.find((s) => s.id === studentId);
+    const targetSchoolId = student?.schoolId || school?.id;
+    if (!targetSchoolId) return;
+
     const newStatus = quickAttendance[studentId] === status ? undefined : status;
 
     if (newStatus) {
-      StorageService.setAttendance(studentId, school.id, selectedDateStr, newStatus);
+      StorageService.setAttendance(studentId, targetSchoolId, selectedDateStr, newStatus);
       setQuickAttendance((prev) => ({ ...prev, [studentId]: newStatus }));
     } else {
-      const existing = StorageService.getAttendanceForDate(selectedDateStr, school.id).find(
+      const existing = StorageService.getAttendanceForDate(selectedDateStr, targetSchoolId).find(
         (a) => a.studentId === studentId
       );
       if (existing) {
@@ -227,11 +331,59 @@ export const ScheduleView: React.FC<Props> = ({
   // Map of calendar days by date string for quick lookup
   const calendarDayMap = useMemo(() => {
     const map: Record<string, SchoolCalendarDay> = {};
-    calendarDays.forEach((d) => {
-      map[d.date] = d;
-    });
+    calendarDays
+      .filter((d) => selectedSchoolFilter === 'all' || d.schoolId === selectedSchoolFilter)
+      .forEach((d) => {
+        map[d.date] = d;
+      });
     return map;
-  }, [calendarDays]);
+  }, [calendarDays, selectedSchoolFilter]);
+
+  // School filter switcher that also syncs the active school at the top
+  const handleSelectSchoolFilter = (filterId: string) => {
+    setSelectedSchoolFilter(filterId);
+    if (filterId !== 'all' && onSelectSchool) {
+      onSelectSchool(filterId);
+    }
+  };
+
+  // Select date AND automatically synchronize the active school at the top
+  const handleSelectDate = (dateStr: string) => {
+    setSelectedDateStr(dateStr);
+
+    // Find all lessons on this date to determine the school
+    const lessonsOnDate = scheduledLessons.filter((l) => l.date === dateStr);
+    if (lessonsOnDate.length > 0) {
+      const counts: Record<string, number> = {};
+      lessonsOnDate.forEach((l) => {
+        const student = allStudentsList.find((s) => s.id === l.studentId);
+        const sId = l.schoolId || student?.schoolId;
+        if (sId) counts[sId] = (counts[sId] || 0) + 1;
+      });
+      const dominantSchoolId = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+      if (dominantSchoolId && onSelectSchool && dominantSchoolId !== school?.id) {
+        onSelectSchool(dominantSchoolId);
+      }
+    } else {
+      // If no lesson scheduled yet, check regular students assigned to that day of week
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const dObj = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        const dayOfWeek = getItalianDayOfWeek(dObj);
+        const regularForDay = allStudentsList.filter((s) => s.lessonDay === dayOfWeek);
+        if (regularForDay.length > 0) {
+          const counts: Record<string, number> = {};
+          regularForDay.forEach((s) => {
+            if (s.schoolId) counts[s.schoolId] = (counts[s.schoolId] || 0) + 1;
+          });
+          const dominantSchoolId = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+          if (dominantSchoolId && onSelectSchool && dominantSchoolId !== school?.id) {
+            onSelectSchool(dominantSchoolId);
+          }
+        }
+      }
+    }
+  };
 
   // Open modal to mark/edit a day in the calendar
   const handleOpenDayModal = (dateStr: string) => {
@@ -250,25 +402,29 @@ export const ScheduleView: React.FC<Props> = ({
 
   // Save calendar day definition
   const handleSaveCalendarDay = () => {
-    if (!school || !dayModalDate) return;
+    if (!dayModalDate) return;
+    const targetSchoolId = selectedSchoolFilter !== 'all' ? selectedSchoolFilter : (school?.id || schoolsList[0]?.id);
+    if (!targetSchoolId) return;
+
     const dayObj: SchoolCalendarDay = {
-      id: `cal-${school.id}-${dayModalDate}`,
-      schoolId: school.id,
+      id: `cal-${targetSchoolId}-${dayModalDate}`,
+      schoolId: targetSchoolId,
       date: dayModalDate,
       type: dayModalType,
       title: dayModalTitle.trim() || undefined,
       notes: dayModalNotes.trim() || undefined,
     };
     StorageService.upsertCalendarDay(dayObj);
-    setCalendarDays(StorageService.getCalendarDays(school.id));
+    setCalendarDays(StorageService.getCalendarDays());
     setDayModalDate(null);
   };
 
   // Remove calendar day designation
   const handleRemoveCalendarDay = (dateStr: string) => {
-    if (!school) return;
-    StorageService.removeCalendarDay(school.id, dateStr);
-    setCalendarDays(StorageService.getCalendarDays(school.id));
+    const targetSchoolId = selectedSchoolFilter !== 'all' ? selectedSchoolFilter : (school?.id || schoolsList[0]?.id);
+    if (!targetSchoolId) return;
+    StorageService.removeCalendarDay(targetSchoolId, dateStr);
+    setCalendarDays(StorageService.getCalendarDays());
     setDayModalDate(null);
   };
 
@@ -302,11 +458,15 @@ export const ScheduleView: React.FC<Props> = ({
   // Save an individual scheduled lesson (create new or update existing)
   const handleSaveScheduledLesson = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!school || !addLessonStudentId || !addLessonDate) return;
+    if (!addLessonStudentId || !addLessonDate) return;
+    const student = allStudentsList.find((s) => s.id === addLessonStudentId);
+    const lessonSchoolId = student?.schoolId || (selectedSchoolFilter !== 'all' ? selectedSchoolFilter : school?.id) || schoolsList[0]?.id;
+    if (!lessonSchoolId) return;
 
     if (editingLesson) {
       const updated: ScheduledLesson = {
         ...editingLesson,
+        schoolId: lessonSchoolId,
         studentId: addLessonStudentId,
         date: addLessonDate,
         startTime: addLessonStartTime,
@@ -319,7 +479,7 @@ export const ScheduleView: React.FC<Props> = ({
     } else {
       const newLesson: ScheduledLesson = {
         id: `sched-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        schoolId: school.id,
+        schoolId: lessonSchoolId,
         studentId: addLessonStudentId,
         date: addLessonDate,
         startTime: addLessonStartTime,
@@ -331,22 +491,27 @@ export const ScheduleView: React.FC<Props> = ({
       StorageService.upsertScheduledLesson(newLesson);
     }
 
-    setScheduledLessons(StorageService.getScheduledLessons(school.id));
+    setScheduledLessons(StorageService.getScheduledLessons());
 
     // Ensure this date is marked in the calendar as a lesson day if not already marked
     if (!calendarDayMap[addLessonDate]) {
       StorageService.upsertCalendarDay({
-        id: `cal-${school.id}-${addLessonDate}`,
-        schoolId: school.id,
+        id: `cal-${lessonSchoolId}-${addLessonDate}`,
+        schoolId: lessonSchoolId,
         date: addLessonDate,
         type: addLessonIsRecupero ? 'recupero' : 'lezione',
         title: addLessonIsRecupero ? 'Lezione di Recupero' : 'Giornata di Lezione',
       });
-      setCalendarDays(StorageService.getCalendarDays(school.id));
+      setCalendarDays(StorageService.getCalendarDays());
+    }
+
+    // Synchronize school at the top navbar
+    if (onSelectSchool && lessonSchoolId !== school?.id) {
+      onSelectSchool(lessonSchoolId);
     }
 
     if (addLessonDate !== selectedDateStr) {
-      setSelectedDateStr(addLessonDate);
+      handleSelectDate(addLessonDate);
     }
 
     setIsAddLessonModalOpen(false);
@@ -357,25 +522,26 @@ export const ScheduleView: React.FC<Props> = ({
 
   // Delete a scheduled lesson
   const handleDeleteScheduledLesson = (id: string) => {
-    if (!confirm('Sei sicuro di voler eliminare questa lezione da questa giornata?')) return;
     StorageService.deleteScheduledLesson(id);
-    if (school) {
-      const remaining = StorageService.getScheduledLessons(school.id);
-      setScheduledLessons(remaining);
-      const remainingOnDate = remaining.filter((l) => l.date === selectedDateStr);
-      if (remainingOnDate.length === 0 && calendarDayMap[selectedDateStr]?.type === 'lezione') {
-        StorageService.removeCalendarDay(school.id, selectedDateStr);
-        setCalendarDays(StorageService.getCalendarDays(school.id));
+    const remaining = StorageService.getScheduledLessons();
+    setScheduledLessons(remaining);
+    const remainingOnDate = remaining.filter((l) => l.date === selectedDateStr);
+    if (remainingOnDate.length === 0 && calendarDayMap[selectedDateStr]?.type === 'lezione') {
+      const targetSchoolId = selectedSchoolFilter !== 'all' ? selectedSchoolFilter : (school?.id || schoolsList[0]?.id);
+      if (targetSchoolId) {
+        StorageService.removeCalendarDay(targetSchoolId, selectedDateStr);
+        setCalendarDays(StorageService.getCalendarDays());
       }
     }
+    setActionFeedback('Lezione rimossa con successo.');
   };
 
   // Quick insert a registered student to this day
   const handleQuickAddStudent = (student: Student) => {
-    if (!school) return;
+    const studentSchoolId = student.schoolId || school?.id || schoolsList[0]?.id || 'default';
     const newLesson: ScheduledLesson = {
       id: `sched-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      schoolId: school.id,
+      schoolId: studentSchoolId,
       studentId: student.id,
       date: selectedDateStr,
       startTime: student.lessonStartTime || '15:00',
@@ -384,46 +550,172 @@ export const ScheduleView: React.FC<Props> = ({
       isRecupero: false,
     };
     StorageService.upsertScheduledLesson(newLesson);
-    setScheduledLessons(StorageService.getScheduledLessons(school.id));
+    setScheduledLessons(StorageService.getScheduledLessons());
 
     if (!calendarDayMap[selectedDateStr]) {
       StorageService.upsertCalendarDay({
-        id: `cal-${school.id}-${selectedDateStr}`,
-        schoolId: school.id,
+        id: `cal-${studentSchoolId}-${selectedDateStr}`,
+        schoolId: studentSchoolId,
         date: selectedDateStr,
         type: 'lezione',
         title: 'Giornata di Lezione',
       });
-      setCalendarDays(StorageService.getCalendarDays(school.id));
+      setCalendarDays(StorageService.getCalendarDays());
+    }
+
+    // Auto-select school at the top
+    if (onSelectSchool && studentSchoolId !== school?.id) {
+      onSelectSchool(studentSchoolId);
     }
   };
 
   // Quick insert all regular students of this weekday to selectedDateStr
-  const handleAddAllRegularStudentsForDay = () => {
-    if (!school || unaddedRegularStudents.length === 0) return;
-    unaddedRegularStudents.forEach((st) => {
+  const handleAddAllRegularStudentsForDay = (targetDateStr?: string) => {
+    const dateToUse = targetDateStr || selectedDateStr;
+    const parts = dateToUse.split('-');
+    const dObj = parts.length === 3 ? new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])) : new Date();
+    const italianDay = getItalianDayOfWeek(dObj);
+    const italianDayName = DAYS_OF_WEEK.find((x) => x.id === italianDay)?.name || italianDay;
+
+    const dayStudents = effectiveStudents.filter((s) => s.lessonDay === italianDay);
+    if (dayStudents.length === 0) {
+      setActionFeedback(`Nessun allievo ha ${italianDayName} impostato come giorno abituale di lezione.`);
+      return;
+    }
+
+    const currentScheduled = StorageService.getScheduledLessons();
+    const alreadyScheduledIds = new Set(
+      currentScheduled.filter((l) => l.date === dateToUse).map((l) => l.studentId)
+    );
+
+    const toAdd = dayStudents.filter((s) => !alreadyScheduledIds.has(s.id));
+    if (toAdd.length === 0) {
+      setActionFeedback(`Tutti gli allievi previsti per ${italianDayName} (${dayStudents.length}) sono già inseriti per la data ${dateToUse}.`);
+      return;
+    }
+
+    toAdd.forEach((st, idx) => {
+      const stSchoolId = st.schoolId || school?.id || schoolsList[0]?.id || 'default';
       StorageService.upsertScheduledLesson({
-        id: `sched-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        schoolId: school.id,
+        id: `sched-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+        schoolId: stSchoolId,
         studentId: st.id,
-        date: selectedDateStr,
+        date: dateToUse,
         startTime: st.lessonStartTime || '15:00',
         endTime: st.lessonEndTime || undefined,
         room: st.lessonRoom || undefined,
         isRecupero: false,
       });
     });
-    setScheduledLessons(StorageService.getScheduledLessons(school.id));
 
-    if (!calendarDayMap[selectedDateStr]) {
+    setScheduledLessons(StorageService.getScheduledLessons());
+
+    if (!calendarDayMap[dateToUse]) {
+      const firstSchoolId = dayStudents[0]?.schoolId || school?.id || schoolsList[0]?.id || 'default';
       StorageService.upsertCalendarDay({
-        id: `cal-${school.id}-${selectedDateStr}`,
-        schoolId: school.id,
-        date: selectedDateStr,
+        id: `cal-${firstSchoolId}-${dateToUse}`,
+        schoolId: firstSchoolId,
+        date: dateToUse,
         type: 'lezione',
         title: 'Giornata di Lezione',
       });
-      setCalendarDays(StorageService.getCalendarDays(school.id));
+      setCalendarDays(StorageService.getCalendarDays());
+    }
+
+    // Auto-sync school at the top navbar
+    const counts: Record<string, number> = {};
+    dayStudents.forEach((s) => {
+      if (s.schoolId) counts[s.schoolId] = (counts[s.schoolId] || 0) + 1;
+    });
+    const dominantSchoolId = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+    if (dominantSchoolId && onSelectSchool && dominantSchoolId !== school?.id) {
+      onSelectSchool(dominantSchoolId);
+    }
+
+    setActionFeedback(`Aggiunte con successo ${toAdd.length} lezioni di ${italianDayName} per il ${dateToUse}!`);
+  };
+
+  // Execute generation of all scheduled lessons and lesson days for the entire current month
+  const executeGenerateMonthLessons = () => {
+    const monthName = MONTH_NAMES[currentMonth];
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+    // Target students according to school filter
+    const targetStudents = effectiveStudents;
+    const studentsWithDays = targetStudents.filter((s) => Boolean(s.lessonDay));
+    if (studentsWithDays.length === 0) {
+      setActionFeedback("Nessun allievo ha un giorno di lezione abituale configurato nell'anagrafica.");
+      setIsGenerateMonthModalOpen(false);
+      return;
+    }
+
+    const currentScheduled = StorageService.getScheduledLessons();
+    const existingLessonsKeySet = new Set(
+      currentScheduled.map((l) => `${l.date}_${l.studentId}`)
+    );
+
+    let addedLessonsCount = 0;
+    let addedDaysCount = 0;
+
+    for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
+      const dObj = new Date(currentYear, currentMonth, dayNum);
+      const dateStr = formatDateToIso(dObj);
+      const italianDay = getItalianDayOfWeek(dObj);
+
+      // Don't overwrite if day is marked as festivo
+      const existingDay = calendarDayMap[dateStr];
+      if (existingDay?.type === 'festivo') {
+        continue;
+      }
+
+      // Find students who have lessons on this weekday
+      const dayStudents = targetStudents.filter((s) => s.lessonDay === italianDay);
+      if (dayStudents.length === 0) continue;
+
+      let addedForThisDay = 0;
+      dayStudents.forEach((st, idx) => {
+        const key = `${dateStr}_${st.id}`;
+        if (!generateAvoidDuplicates || !existingLessonsKeySet.has(key)) {
+          const stSchoolId = st.schoolId || school?.id || schoolsList[0]?.id || 'default';
+          StorageService.upsertScheduledLesson({
+            id: `sched-${Date.now()}-${dayNum}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+            schoolId: stSchoolId,
+            studentId: st.id,
+            date: dateStr,
+            startTime: st.lessonStartTime || '15:00',
+            endTime: st.lessonEndTime || undefined,
+            room: st.lessonRoom || undefined,
+            isRecupero: false,
+          });
+          existingLessonsKeySet.add(key);
+          addedLessonsCount++;
+          addedForThisDay++;
+        }
+      });
+
+      // Mark day in school calendar as 'lezione' if enabled and not already marked
+      if (generateSetCalendarDays && !existingDay && (dayStudents.length > 0 || addedForThisDay > 0)) {
+        const firstStudentSchoolId = dayStudents[0]?.schoolId || school?.id || schoolsList[0]?.id || 'default';
+        StorageService.upsertCalendarDay({
+          id: `cal-${firstStudentSchoolId}-${dateStr}`,
+          schoolId: firstStudentSchoolId,
+          date: dateStr,
+          type: 'lezione',
+          title: 'Giornata di Lezione',
+        });
+        addedDaysCount++;
+      }
+    }
+
+    // Refresh state
+    setScheduledLessons(StorageService.getScheduledLessons());
+    setCalendarDays(StorageService.getCalendarDays());
+    setIsGenerateMonthModalOpen(false);
+
+    if (addedLessonsCount > 0) {
+      setActionFeedback(`Generate con successo ${addedLessonsCount} lezioni per ${monthName} ${currentYear}!`);
+    } else {
+      setActionFeedback(`Tutte le lezioni per ${monthName} ${currentYear} risultavano già presenti nel calendario.`);
     }
   };
 
@@ -444,21 +736,22 @@ export const ScheduleView: React.FC<Props> = ({
 
   // Regular students registered for this weekday (used for quick-add suggestions only)
   const regularStudentsForDay = useMemo(() => {
-    return students.filter((s) => s.lessonDay === selectedItalianDay);
-  }, [students, selectedItalianDay]);
+    return effectiveStudents.filter((s) => s.lessonDay === selectedItalianDay);
+  }, [effectiveStudents, selectedItalianDay]);
 
   // Regular students that have NOT yet been scheduled for this date
   const unaddedRegularStudents = useMemo(() => {
     const scheduledStudentIds = new Set(
-      scheduledLessons.filter((l) => l.date === selectedDateStr).map((l) => l.studentId)
+      filteredScheduledLessons.filter((l) => l.date === selectedDateStr).map((l) => l.studentId)
     );
     return regularStudentsForDay.filter((s) => !scheduledStudentIds.has(s.id));
-  }, [regularStudentsForDay, scheduledLessons, selectedDateStr]);
+  }, [regularStudentsForDay, filteredScheduledLessons, selectedDateStr]);
 
   // Lessons for selected date: ONLY explicitly added / scheduled lessons
   const lessonsForSelectedDate = useMemo(() => {
     const list: Array<{
       student: Student;
+      schoolObj?: School;
       startTime: string;
       endTime?: string;
       room?: string;
@@ -468,15 +761,18 @@ export const ScheduleView: React.FC<Props> = ({
       scheduledLesson: ScheduledLesson;
     }> = [];
 
-    scheduledLessons
+    filteredScheduledLessons
       .filter((sl) => sl.date === selectedDateStr)
       .forEach((sl) => {
-        const student = students.find((s) => s.id === sl.studentId);
+        const student = allStudentsList.find((s) => s.id === sl.studentId);
         if (!student) return;
         if (filterInstrument !== 'all' && student.instrument !== filterInstrument) return;
 
+        const schoolObj = schoolsList.find((sc) => sc.id === (sl.schoolId || student.schoolId));
+
         list.push({
           student,
+          schoolObj,
           startTime: sl.startTime,
           endTime: sl.endTime,
           room: sl.room || student.lessonRoom,
@@ -488,7 +784,7 @@ export const ScheduleView: React.FC<Props> = ({
       });
 
     return list.sort((a, b) => a.startTime.localeCompare(b.startTime));
-  }, [students, scheduledLessons, selectedDateStr, filterInstrument]);
+  }, [allStudentsList, schoolsList, filteredScheduledLessons, selectedDateStr, filterInstrument]);
 
   // Calendar grid computation
   const calendarMonthGrid = useMemo(() => {
@@ -507,6 +803,7 @@ export const ScheduleView: React.FC<Props> = ({
       calendarDay?: SchoolCalendarDay;
       isToday: boolean;
       lessonsCount: number;
+      schoolBreakdown: Array<{ schoolId: string; schoolName: string; count: number; theme: any }>;
     }> = [];
 
     // Leading empty / previous month cells
@@ -521,6 +818,7 @@ export const ScheduleView: React.FC<Props> = ({
         calendarDay: calendarDayMap[iso],
         isToday: iso === todayIso,
         lessonsCount: 0,
+        schoolBreakdown: [],
       });
     }
 
@@ -529,9 +827,28 @@ export const ScheduleView: React.FC<Props> = ({
       const d = new Date(currentYear, currentMonth, dayNum);
       const iso = formatDateToIso(d);
 
-      // ONLY count explicitly scheduled lessons on this date
-      const effectiveCount = scheduledLessons.filter((s) => s.date === iso).length;
+      // Count explicitly scheduled lessons on this date
+      const dayLessons = filteredScheduledLessons.filter((s) => s.date === iso);
+      const effectiveCount = dayLessons.length;
       const calDay = calendarDayMap[iso];
+
+      // School breakdown for multi-school visualization
+      const schoolCounts: Record<string, number> = {};
+      dayLessons.forEach((l) => {
+        const student = allStudentsList.find((st) => st.id === l.studentId);
+        const sId = l.schoolId || student?.schoolId || 'default';
+        schoolCounts[sId] = (schoolCounts[sId] || 0) + 1;
+      });
+
+      const schoolBreakdown = Object.entries(schoolCounts).map(([sId, count]) => {
+        const sc = schoolsList.find((s) => s.id === sId);
+        return {
+          schoolId: sId,
+          schoolName: sc?.name || 'Scuola',
+          count,
+          theme: getSchoolTheme(sId, schoolsList),
+        };
+      });
 
       days.push({
         dateStr: iso,
@@ -540,6 +857,7 @@ export const ScheduleView: React.FC<Props> = ({
         calendarDay: calDay,
         isToday: iso === todayIso,
         lessonsCount: effectiveCount,
+        schoolBreakdown,
       });
     }
 
@@ -555,26 +873,31 @@ export const ScheduleView: React.FC<Props> = ({
         calendarDay: calendarDayMap[iso],
         isToday: iso === todayIso,
         lessonsCount: 0,
+        schoolBreakdown: [],
       });
     }
 
     return days;
-  }, [currentYear, currentMonth, calendarDayMap, scheduledLessons, todayIso]);
+  }, [currentYear, currentMonth, calendarDayMap, filteredScheduledLessons, allStudentsList, schoolsList, todayIso]);
 
   // Instruments list
   const instruments = useMemo(() => {
     const set = new Set<string>();
-    students.forEach((s) => {
+    effectiveStudents.forEach((s) => {
       if (s.instrument) set.add(s.instrument);
     });
     return Array.from(set).sort();
-  }, [students]);
+  }, [effectiveStudents]);
 
   // Month stats (based strictly on explicitly scheduled lessons and configured calendar days)
   const monthStats = useMemo(() => {
     const prefix = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
-    const lessonsThisMonth = scheduledLessons.filter((l) => l.date.startsWith(prefix));
-    const daysThisMonth = calendarDays.filter((d) => d.date.startsWith(prefix));
+    const lessonsThisMonth = filteredScheduledLessons.filter((l) => l.date.startsWith(prefix));
+    const daysThisMonth = calendarDays.filter((d) => {
+      const matchesPrefix = d.date.startsWith(prefix);
+      const matchesSchool = selectedSchoolFilter === 'all' || d.schoolId === selectedSchoolFilter;
+      return matchesPrefix && matchesSchool;
+    });
     const countRecuperi = lessonsThisMonth.filter((l) => l.isRecupero).length;
     const countSaggi = daysThisMonth.filter((d) => d.type === 'saggio').length;
     const countFestivi = daysThisMonth.filter((d) => d.type === 'festivo' || d.type === 'sospensione').length;
@@ -586,7 +909,7 @@ export const ScheduleView: React.FC<Props> = ({
       countFestivi,
       totalMarked: daysThisMonth.length,
     };
-  }, [calendarDays, scheduledLessons, currentYear, currentMonth]);
+  }, [calendarDays, filteredScheduledLessons, selectedSchoolFilter, currentYear, currentMonth]);
 
   const handlePrevMonth = () => {
     if (currentMonth === 0) {
@@ -614,23 +937,20 @@ export const ScheduleView: React.FC<Props> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-50 text-petrol font-bold text-xs">
-              <CalendarCheck2 className="h-3.5 w-3.5 text-petrol" />
-              {school?.name || 'Scuola'}
-            </span>
-            <span className="text-xs text-slate-400 font-medium">• A.S. {school?.academicYear || '2025/2026'}</span>
-          </div>
-          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-1 flex items-center gap-2">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl border border-slate-200/80 shadow-xs">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
             Calendario & Giornata
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Inserisci e gestisci le date effettive di lezione, segna saggi e recuperi, e gestisci il tabellone giorno per giorno.
-          </p>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-50 text-petrol font-bold text-xs">
+              <CalendarCheck2 className="h-3 w-3 text-petrol" />
+              {school?.name || 'Scuola'}
+            </span>
+            <span className="text-[11px] text-slate-400 font-medium">• A.S. {school?.academicYear || '2025/2026'}</span>
+          </div>
         </div>
 
         {/* View Switcher: Calendario Mensile vs Registro della Giornata */}
@@ -694,6 +1014,75 @@ export const ScheduleView: React.FC<Props> = ({
         </div>
       </div>
 
+      {/* School Integration / Filter Toolbar (when multiple schools exist) */}
+      {schoolsList.length > 1 && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-slate-500 shrink-0" />
+            <span className="text-xs font-bold text-slate-700">Filtro Scuola Calendario:</span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => handleSelectSchoolFilter('all')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                selectedSchoolFilter === 'all'
+                  ? 'bg-petrol text-white shadow-xs'
+                  : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <span>Tutte le Scuole (Unificato)</span>
+            </button>
+
+            {schoolsList.map((sc) => {
+              const theme = getSchoolTheme(sc.id, schoolsList);
+              const isFilterSelected = selectedSchoolFilter === sc.id;
+              const isTopActive = school?.id === sc.id;
+
+              return (
+                <button
+                  key={sc.id}
+                  type="button"
+                  onClick={() => handleSelectSchoolFilter(sc.id)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                    isFilterSelected
+                      ? `${theme.badge} ring-2 ring-current font-black`
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                  title={`Clicca per filtrare il calendario e selezionare ${sc.name} nella pagina in alto`}
+                >
+                  <span className={`h-2 w-2 rounded-full ${theme.dot}`} />
+                  <span>{sc.name}</span>
+                  {isTopActive && (
+                    <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100/80 px-1 rounded ml-0.5">
+                      ✓ In alto
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Action feedback notification banner */}
+      {actionFeedback && (
+        <div className="bg-emerald-50 border border-emerald-300 text-emerald-900 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+            <span>{actionFeedback}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionFeedback(null)}
+            className="text-emerald-700 hover:text-emerald-900 font-bold ml-2 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* ============================================================ */}
       {/* 1. CALENDARIO MENSILE VIEW */}
       {/* ============================================================ */}
@@ -735,12 +1124,22 @@ export const ScheduleView: React.FC<Props> = ({
 
               <button
                 type="button"
-                onClick={() => handleOpenDayModal(selectedDateStr)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer shadow-2xs"
-                title="Imposta se la data è una giornata di lezione, festivo o saggio"
+                onClick={() => handleAddAllRegularStudentsForDay()}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-teal-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-teal-700 transition cursor-pointer shadow-xs"
+                title={`Aggiungi tutte le lezioni degli allievi del ${selectedItalianDay} (${regularStudentsForDay.length} allievi) per la data selezionata (${selectedDateStr})`}
               >
-                <Tag className="h-3.5 w-3.5 text-slate-500" />
-                <span>Tipo Giornata</span>
+                <Users className="h-3.5 w-3.5" />
+                <span>Aggiungi Giornata</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsGenerateMonthModalOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-petrol transition cursor-pointer shadow-2xs"
+                title={`Genera automaticamente tutte le lezioni di ${MONTH_NAMES[currentMonth]} ${currentYear} in base ai giorni abituali degli allievi`}
+              >
+                <CalendarDays className="h-3.5 w-3.5 text-petrol" />
+                <span>Genera Giornate del Mese</span>
               </button>
             </div>
           </div>
@@ -787,8 +1186,8 @@ export const ScheduleView: React.FC<Props> = ({
                 return (
                   <div
                     key={idx}
-                    onClick={() => setSelectedDateStr(cell.dateStr)}
-                    className={`min-h-[90px] sm:min-h-[110px] p-2 flex flex-col justify-between transition cursor-pointer relative group ${
+                    onClick={() => handleSelectDate(cell.dateStr)}
+                    className={`min-h-[95px] sm:min-h-[115px] p-2 flex flex-col justify-between transition cursor-pointer relative group ${
                       !cell.isCurrentMonth ? 'bg-slate-50/50 text-slate-300' : 'bg-white'
                     } ${
                       isSelected
@@ -819,7 +1218,7 @@ export const ScheduleView: React.FC<Props> = ({
                             handleOpenAddLesson(cell.dateStr);
                           }}
                           className="text-slate-400 hover:text-petrol transition p-0.5 rounded hover:bg-teal-50"
-                          title="Aggiungi lezione a questo giorno"
+                          title="Aggiungi singola lezione a questo giorno"
                         >
                           <Plus className="h-3.5 w-3.5" />
                         </button>
@@ -837,7 +1236,7 @@ export const ScheduleView: React.FC<Props> = ({
                       </div>
                     </div>
 
-                    {/* Middle: Day type tag */}
+                    {/* Middle: Day type tag & School breakdown or count */}
                     <div className="my-1 space-y-1">
                       {typeCfg && (
                         <div
@@ -848,13 +1247,35 @@ export const ScheduleView: React.FC<Props> = ({
                         </div>
                       )}
 
-                      {/* Lesson counter badge - only shows if lessons have actually been added */}
-                      {cell.lessonsCount > 0 && (
+                      {/* Multi-school breakdown pills */}
+                      {cell.schoolBreakdown && cell.schoolBreakdown.length > 1 ? (
+                        <div className="space-y-0.5">
+                          {cell.schoolBreakdown.map((sb) => (
+                            <div
+                              key={sb.schoolId}
+                              className={`flex items-center justify-between text-[9px] font-bold px-1.5 py-0.5 rounded border ${sb.theme.badge}`}
+                              title={`${sb.schoolName}: ${sb.count} lezioni`}
+                            >
+                              <span className="truncate max-w-[55px]">{sb.schoolName}</span>
+                              <span className="font-extrabold ml-1 shrink-0">{sb.count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : cell.schoolBreakdown && cell.schoolBreakdown.length === 1 ? (
+                        <div
+                          className={`flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border ${cell.schoolBreakdown[0].theme.badge}`}
+                          title={`${cell.schoolBreakdown[0].schoolName}: ${cell.schoolBreakdown[0].count} lezioni`}
+                        >
+                          <Clock className="h-2.5 w-2.5 shrink-0" />
+                          <span className="truncate">{cell.schoolBreakdown[0].schoolName}</span>
+                          <span className="ml-auto font-black">({cell.schoolBreakdown[0].count})</span>
+                        </div>
+                      ) : cell.lessonsCount > 0 ? (
                         <div className="flex items-center gap-1 text-[10px] font-bold text-petrol bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200/60">
-                          <Clock className="h-2.5 w-2.5 text-petrol" />
+                          <Clock className="h-2.5 w-2.5 text-petrol shrink-0" />
                           <span>{cell.lessonsCount} {cell.lessonsCount === 1 ? 'lezione' : 'lezioni'}</span>
                         </div>
-                      )}
+                      ) : null}
                     </div>
 
                     {/* Bottom: Quick action to jump to day details */}
@@ -878,14 +1299,22 @@ export const ScheduleView: React.FC<Props> = ({
           {/* Prompt to open the selected day */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-teal-50/60 border border-teal-200/80 p-4 rounded-2xl">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-petrol text-white flex items-center justify-center font-bold">
+              <div className="h-10 w-10 rounded-xl bg-petrol text-white flex items-center justify-center font-bold shrink-0">
                 <CalendarIcon className="h-5 w-5" />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-slate-900">
-                  Data selezionata: {selectedDateStr} ({DAYS_OF_WEEK.find((x) => x.id === selectedItalianDay)?.name})
-                </h4>
-                <p className="text-xs text-slate-600">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-bold text-slate-900">
+                    Data selezionata: {selectedDateStr} ({DAYS_OF_WEEK.find((x) => x.id === selectedItalianDay)?.name})
+                  </h4>
+                  {school && (
+                    <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md bg-white border border-teal-300 text-petrol">
+                      <Building2 className="h-3 w-3 text-petrol" />
+                      {school.name}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-600 mt-0.5">
                   {selectedDayConfig ? (
                     <span>Contrassegnata come: <strong>{DAY_TYPE_CONFIG[selectedDayConfig.type].label}</strong> {selectedDayConfig.title ? `(${selectedDayConfig.title})` : ''}</span>
                   ) : (
@@ -903,6 +1332,16 @@ export const ScheduleView: React.FC<Props> = ({
               >
                 <Plus className="h-3.5 w-3.5" />
                 <span>+ Aggiungi Lezione</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleAddAllRegularStudentsForDay()}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 transition cursor-pointer shadow-xs"
+                title={`Aggiungi tutte le lezioni degli allievi con orario abituale di ${selectedItalianDay} (${regularStudentsForDay.length} allievi)`}
+              >
+                <Users className="h-3.5 w-3.5" />
+                <span>Aggiungi Giornata</span>
               </button>
 
               <button
@@ -967,19 +1406,10 @@ export const ScheduleView: React.FC<Props> = ({
                 <input
                   type="date"
                   value={selectedDateStr}
-                  onChange={(e) => setSelectedDateStr(e.target.value)}
+                  onChange={(e) => handleSelectDate(e.target.value)}
                   className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer"
                 />
               </div>
-
-              <button
-                type="button"
-                onClick={() => handleOpenDayModal(selectedDateStr)}
-                className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
-              >
-                <Tag className="h-3.5 w-3.5 text-slate-500" />
-                <span>Tipo Giornata</span>
-              </button>
 
               <button
                 type="button"
@@ -989,26 +1419,86 @@ export const ScheduleView: React.FC<Props> = ({
                 <Plus className="h-3.5 w-3.5" />
                 <span>+ Aggiungi Lezione</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => handleAddAllRegularStudentsForDay()}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-teal-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-teal-700 transition cursor-pointer shadow-xs"
+                title={`Aggiungi tutte le lezioni degli allievi con orario abituale di ${selectedItalianDay} (${regularStudentsForDay.length} allievi)`}
+              >
+                <Users className="h-3.5 w-3.5" />
+                <span>Aggiungi Giornata</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleOpenDayModal(selectedDateStr)}
+                className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
+              >
+                <Tag className="h-3.5 w-3.5 text-slate-500" />
+                <span>Tipo Giornata</span>
+              </button>
             </div>
           </div>
 
           {/* Filter Bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-100/70 p-3 rounded-xl border border-slate-200/60 text-xs">
-            <div className="flex items-center gap-2">
-              <Filter className="h-3.5 w-3.5 text-slate-500" />
-              <span className="font-semibold text-slate-700">Filtra Strumento:</span>
-              <select
-                value={filterInstrument}
-                onChange={(e) => setFilterInstrument(e.target.value)}
-                className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 outline-none focus:border-petrol"
-              >
-                <option value="all">Tutti gli strumenti ({students.length})</option>
-                {instruments.map((ins) => (
-                  <option key={ins} value={ins}>
-                    {ins}
-                  </option>
-                ))}
-              </select>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Filter className="h-3.5 w-3.5 text-slate-500" />
+                <span className="font-semibold text-slate-700">Filtra Strumento:</span>
+                <select
+                  value={filterInstrument}
+                  onChange={(e) => setFilterInstrument(e.target.value)}
+                  className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 outline-none focus:border-petrol"
+                >
+                  <option value="all">Tutti gli strumenti ({effectiveStudents.length})</option>
+                  {instruments.map((ins) => (
+                    <option key={ins} value={ins}>
+                      {ins}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {schoolsList.length > 1 && (
+                <div className="flex items-center gap-1.5 pl-2 border-l border-slate-200">
+                  <span className="font-semibold text-slate-500">Scuola:</span>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectSchoolFilter('all')}
+                    className={`px-2 py-0.5 rounded text-[11px] font-bold transition cursor-pointer ${
+                      selectedSchoolFilter === 'all'
+                        ? 'bg-petrol text-white'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    Tutte
+                  </button>
+                  {schoolsList.map((sc) => {
+                    const theme = getSchoolTheme(sc.id, schoolsList);
+                    const isSelected = selectedSchoolFilter === sc.id;
+                    return (
+                      <button
+                        key={sc.id}
+                        type="button"
+                        onClick={() => handleSelectSchoolFilter(sc.id)}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border transition cursor-pointer ${
+                          isSelected
+                            ? `${theme.badge} ring-1 ring-current font-black`
+                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${theme.dot}`} />
+                        <span>{sc.name}</span>
+                        {school?.id === sc.id && (
+                          <span className="text-[9px] text-emerald-700 font-extrabold ml-0.5">✓</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {selectedDayConfig?.notes && (
@@ -1027,16 +1517,25 @@ export const ScheduleView: React.FC<Props> = ({
                 Nessuna lezione inserita per {selectedDateStr}
               </h4>
               <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-5">
-                Il calendario per questa data è vuoto. Le lezioni compaiono solo quando le inserisci. Clicca su "+ Aggiungi Lezione" per programmarne una.
+                Il calendario per questa data è vuoto. Le lezioni compaiono solo quando le inserisci. Clicca su "+ Aggiungi Lezione" per una singola lezione o "Aggiungi Giornata" per tutti gli allievi previsti.
               </p>
-              <div className="flex flex-wrap items-center justify-center gap-2">
+              <div className="flex flex-wrap items-center justify-center gap-2.5">
                 <button
                   type="button"
                   onClick={() => handleOpenAddLesson(selectedDateStr)}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-petrol px-4 py-2 text-xs font-bold text-white hover:bg-[#23584F] transition cursor-pointer shadow-xs"
                 >
                   <Plus className="h-4 w-4" />
-                  <span>+ Aggiungi Lezione a questa Giornata</span>
+                  <span>+ Aggiungi Singola Lezione</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleAddAllRegularStudentsForDay()}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2 text-xs font-bold text-white hover:bg-teal-700 transition cursor-pointer shadow-xs"
+                >
+                  <Users className="h-4 w-4" />
+                  <span>Aggiungi Giornata</span>
                 </button>
               </div>
 
@@ -1107,6 +1606,24 @@ export const ScheduleView: React.FC<Props> = ({
                           <h4 className="text-base font-bold text-slate-900">
                             {student.lastName} {student.firstName}
                           </h4>
+                          {item.schoolObj && (
+                            <button
+                              type="button"
+                              onClick={() => onSelectSchool?.(item.schoolObj!.id)}
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold border transition cursor-pointer ${
+                                school?.id === item.schoolObj.id
+                                  ? `${getSchoolTheme(item.schoolObj.id, schoolsList).badge} ring-1 ring-current`
+                                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                              }`}
+                              title={`Scuola: ${item.schoolObj.name}. Clicca per selezionare in alto.`}
+                            >
+                              <Building2 className="h-3 w-3" />
+                              <span>{item.schoolObj.name}</span>
+                              {school?.id === item.schoolObj.id && (
+                                <span className="text-[9px] font-extrabold text-emerald-700">✓ In alto</span>
+                              )}
+                            </button>
+                          )}
                           {item.isRecupero && (
                             <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 text-amber-800 px-2 py-0.5 text-xs font-bold">
                               Recupero / Straordinaria
@@ -1262,7 +1779,7 @@ export const ScheduleView: React.FC<Props> = ({
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {DAYS_OF_WEEK.filter((d) => d.id !== 'domenica').map((day) => {
-              const dayStudents = students
+              const dayStudents = effectiveStudents
                 .filter((s) => s.lessonDay === day.id)
                 .filter((s) => (filterInstrument === 'all' ? true : s.instrument === filterInstrument))
                 .sort((a, b) => (a.lessonStartTime || '99:99').localeCompare(b.lessonStartTime || '99:99'));
@@ -1285,31 +1802,45 @@ export const ScheduleView: React.FC<Props> = ({
                         Nessuna lezione ordinaria
                       </div>
                     ) : (
-                      dayStudents.map((s) => (
-                        <div
-                          key={s.id}
-                          onClick={() => onSelectStudent(s)}
-                          className="group p-2.5 rounded-xl border border-slate-100 bg-slate-50/70 hover:bg-white hover:border-petrol/40 hover:shadow-xs transition cursor-pointer"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-black text-petrol">
-                              {s.lessonStartTime || '--:--'} - {s.lessonEndTime || ''}
-                            </span>
-                            {s.lessonRoom && (
-                              <span className="text-[10px] font-semibold text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100 truncate max-w-[80px]">
-                                {s.lessonRoom}
+                      dayStudents.map((s) => {
+                        const sSchool = schoolsList.find((sc) => sc.id === s.schoolId);
+                        const sTheme = s.schoolId ? getSchoolTheme(s.schoolId, schoolsList) : null;
+
+                        return (
+                          <div
+                            key={s.id}
+                            onClick={() => {
+                              if (s.schoolId && s.schoolId !== school?.id) {
+                                onSelectSchool?.(s.schoolId);
+                              }
+                              onSelectStudent(s);
+                            }}
+                            className="group p-2.5 rounded-xl border border-slate-100 bg-slate-50/70 hover:bg-white hover:border-petrol/40 hover:shadow-xs transition cursor-pointer"
+                          >
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-xs font-black text-petrol">
+                                {s.lessonStartTime || '--:--'} - {s.lessonEndTime || ''}
                               </span>
-                            )}
+                              {s.lessonRoom && (
+                                <span className="text-[10px] font-semibold text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100 truncate max-w-[80px]">
+                                  {s.lessonRoom}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs font-bold text-slate-900 group-hover:text-petrol transition mt-1">
+                              {s.lastName} {s.firstName}
+                            </div>
+                            <div className="text-[11px] text-slate-500 mt-0.5 flex items-center justify-between gap-1 flex-wrap">
+                              <span>{s.instrument || 'Corso'}</span>
+                              {sSchool && schoolsList.length > 1 && sTheme && (
+                                <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${sTheme.badge}`}>
+                                  {sSchool.name}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div className="text-xs font-bold text-slate-900 group-hover:text-petrol transition mt-1">
-                            {s.lastName} {s.firstName}
-                          </div>
-                          <div className="text-[11px] text-slate-500 mt-0.5 flex items-center justify-between">
-                            <span>{s.instrument || 'Corso'}</span>
-                            <span className="text-[10px] text-slate-400">{s.level}</span>
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -1485,21 +2016,30 @@ export const ScheduleView: React.FC<Props> = ({
                   value={addLessonStudentId}
                   onChange={(e) => {
                     setAddLessonStudentId(e.target.value);
-                    const s = students.find((st) => st.id === e.target.value);
-                    if (s && !editingLesson) {
-                      if (s.lessonStartTime) setAddLessonStartTime(s.lessonStartTime);
-                      if (s.lessonEndTime) setAddLessonEndTime(s.lessonEndTime);
-                      if (s.lessonRoom) setAddLessonRoom(s.lessonRoom);
+                    const s = effectiveStudents.find((st) => st.id === e.target.value);
+                    if (s) {
+                      if (!editingLesson) {
+                        if (s.lessonStartTime) setAddLessonStartTime(s.lessonStartTime);
+                        if (s.lessonEndTime) setAddLessonEndTime(s.lessonEndTime);
+                        if (s.lessonRoom) setAddLessonRoom(s.lessonRoom);
+                      }
+                      if (s.schoolId && s.schoolId !== school?.id) {
+                        onSelectSchool?.(s.schoolId);
+                      }
                     }
                   }}
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-800 outline-none focus:border-petrol"
                 >
                   <option value="">-- Scegli un allievo --</option>
-                  {students.map((st) => (
-                    <option key={st.id} value={st.id}>
-                      {st.lastName} {st.firstName} ({st.instrument || 'Senza strumento'})
-                    </option>
-                  ))}
+                  {effectiveStudents.map((st) => {
+                    const stSchool = schoolsList.find((sc) => sc.id === st.schoolId);
+                    return (
+                      <option key={st.id} value={st.id}>
+                        {st.lastName} {st.firstName} ({st.instrument || 'Senza strumento'})
+                        {schoolsList.length > 1 && stSchool ? ` • [${stSchool.name}]` : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -1588,6 +2128,135 @@ export const ScheduleView: React.FC<Props> = ({
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* MODAL: GENERA GIORNATE DEL MESE */}
+      {/* ============================================================ */}
+      {isGenerateMonthModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-teal-50 text-petrol border border-teal-100">
+                  <CalendarDays className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Genera Giornate e Lezioni del Mese
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Mese di {MONTH_NAMES[currentMonth]} {currentYear} • {school?.name}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsGenerateMonthModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Students count and status */}
+            {students.filter((s) => Boolean(s.lessonDay)).length === 0 ? (
+              <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3.5 rounded-xl text-xs space-y-2">
+                <div className="flex items-center gap-2 font-bold text-amber-800">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>Nessun allievo ha un giorno di lezione assegnato</span>
+                </div>
+                <p className="text-amber-700">
+                  Per generare automaticamente le lezioni, devi prima assegnare il giorno abituale di lezione (es. Lunedì, Martedì, ecc.) e l'orario nella scheda dei tuoi allievi.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3.5">
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Questa operazione programma automaticamente nel calendario tutte le lezioni per ogni data del mese di <strong>{MONTH_NAMES[currentMonth]} {currentYear}</strong>, associando ciascun allievo al proprio giorno abituale e orario.
+                </p>
+
+                {/* Day of week breakdown */}
+                <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/80 space-y-2">
+                  <div className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                    <span>Allievi configurati per giorno della settimana:</span>
+                    <span className="text-petrol font-bold">
+                      {students.filter((s) => Boolean(s.lessonDay)).length} allievi totali
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-1">
+                    {DAYS_OF_WEEK.map((d) => {
+                      const count = students.filter((s) => s.lessonDay === d.id).length;
+                      return (
+                        <div
+                          key={d.id}
+                          className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs border ${
+                            count > 0
+                              ? 'bg-white border-teal-200 text-slate-800 font-semibold shadow-2xs'
+                              : 'bg-slate-100/60 border-slate-200 text-slate-400'
+                          }`}
+                        >
+                          <span>{d.name}:</span>
+                          <span className={count > 0 ? 'text-teal-700 font-bold' : ''}>
+                            {count}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Options */}
+                <div className="space-y-2 pt-1">
+                  <label className="flex items-start gap-2.5 cursor-pointer text-xs text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={generateAvoidDuplicates}
+                      onChange={(e) => setGenerateAvoidDuplicates(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-petrol focus:ring-petrol"
+                    />
+                    <span>
+                      <strong>Evita duplicati:</strong> Non inserire lezioni se l'allievo è già programmato per quella specifica data.
+                    </span>
+                  </label>
+
+                  <label className="flex items-start gap-2.5 cursor-pointer text-xs text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={generateSetCalendarDays}
+                      onChange={(e) => setGenerateSetCalendarDays(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-petrol focus:ring-petrol"
+                    />
+                    <span>
+                      <strong>Contrassegna giornate:</strong> Imposta le date generate come "Giornata di Lezione" nel calendario mensile.
+                    </span>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsGenerateMonthModalOpen(false)}
+                className="px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer transition"
+              >
+                Annulla
+              </button>
+              {students.filter((s) => Boolean(s.lessonDay)).length > 0 && (
+                <button
+                  type="button"
+                  onClick={executeGenerateMonthLessons}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-petrol text-xs font-bold text-white hover:bg-[#23584F] cursor-pointer shadow-xs transition"
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+                  <span>Conferma e Genera Mese</span>
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
