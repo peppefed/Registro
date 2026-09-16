@@ -26,7 +26,7 @@ export default function App() {
   });
 
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [activeMainTab, setActiveMainTab] = useState<'alunni' | 'orario' | 'appello' | 'statistiche'>('alunni');
+  const [activeMainTab, setActiveMainTab] = useState<'alunni' | 'calendario' | 'appello' | 'statistiche'>('alunni');
 
   // Modals
   const [isSchoolManagerOpen, setIsSchoolManagerOpen] = useState(false);
@@ -140,7 +140,7 @@ export default function App() {
               />
             )}
 
-            {activeMainTab === 'orario' && (
+            {activeMainTab === 'calendario' && (
               <ScheduleView
                 school={activeSchool}
                 students={activeStudents}

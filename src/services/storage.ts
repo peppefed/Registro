@@ -8,6 +8,8 @@ import {
   IntermediateTest,
   ReportLayoutConfig,
   AppDatabaseState,
+  SchoolCalendarDay,
+  ScheduledLesson,
 } from '../types';
 
 const changeListeners = new Set<() => void>();
@@ -30,6 +32,8 @@ const STORAGE_KEYS = {
   LESSONS: 'registro_lezioni_v1',
   EVALUATIONS: 'registro_valutazioni_v1',
   TESTS: 'registro_verifiche_v1',
+  CALENDAR_DAYS: 'registro_giornate_calendario_v1',
+  SCHEDULED_LESSONS: 'registro_lezioni_programmate_v1',
   LAYOUT_CONFIG: 'registro_layout_config_v1',
 };
 
@@ -591,6 +595,59 @@ export const StorageService = {
     this.saveTests(all);
   },
 
+  // Calendar Days (Giornate effettive di lezione, recupero, saggi, festivi)
+  getCalendarDays(schoolId?: string): SchoolCalendarDay[] {
+    let all = getJson<SchoolCalendarDay[]>(STORAGE_KEYS.CALENDAR_DAYS, []);
+    if (schoolId) all = all.filter((d) => d.schoolId === schoolId);
+    return all.sort((a, b) => a.date.localeCompare(b.date));
+  },
+  saveCalendarDays(days: SchoolCalendarDay[]): void {
+    setJson(STORAGE_KEYS.CALENDAR_DAYS, days);
+    notifyChange();
+  },
+  upsertCalendarDay(day: SchoolCalendarDay): void {
+    const all = this.getCalendarDays();
+    const idx = all.findIndex((d) => d.schoolId === day.schoolId && d.date === day.date);
+    if (idx >= 0) {
+      all[idx] = day;
+    } else {
+      all.push(day);
+    }
+    this.saveCalendarDays(all);
+  },
+  removeCalendarDay(schoolId: string, date: string): void {
+    const all = this.getCalendarDays().filter(
+      (d) => !(d.schoolId === schoolId && d.date === date)
+    );
+    this.saveCalendarDays(all);
+  },
+
+  // Scheduled Lessons (Specific date overrides, additional lessons or recuperi)
+  getScheduledLessons(schoolId?: string, date?: string): ScheduledLesson[] {
+    let all = getJson<ScheduledLesson[]>(STORAGE_KEYS.SCHEDULED_LESSONS, []);
+    if (schoolId) all = all.filter((l) => l.schoolId === schoolId);
+    if (date) all = all.filter((l) => l.date === date);
+    return all.sort((a, b) => a.startTime.localeCompare(b.startTime));
+  },
+  saveScheduledLessons(lessons: ScheduledLesson[]): void {
+    setJson(STORAGE_KEYS.SCHEDULED_LESSONS, lessons);
+    notifyChange();
+  },
+  upsertScheduledLesson(lesson: ScheduledLesson): void {
+    const all = this.getScheduledLessons();
+    const idx = all.findIndex((l) => l.id === lesson.id);
+    if (idx >= 0) {
+      all[idx] = lesson;
+    } else {
+      all.push(lesson);
+    }
+    this.saveScheduledLessons(all);
+  },
+  deleteScheduledLesson(id: string): void {
+    const all = this.getScheduledLessons().filter((l) => l.id !== id);
+    this.saveScheduledLessons(all);
+  },
+
   // Layout Config
   getLayoutConfig(): ReportLayoutConfig {
     return getJson<ReportLayoutConfig>(STORAGE_KEYS.LAYOUT_CONFIG, DEFAULT_LAYOUT_CONFIG);
@@ -616,6 +673,8 @@ export const StorageService = {
       lessons: this.getLessons(),
       evaluations: this.getEvaluations(),
       tests: this.getTests(),
+      calendarDays: this.getCalendarDays(),
+      scheduledLessons: this.getScheduledLessons(),
       layoutConfig: this.getLayoutConfig(),
     };
   },
@@ -640,6 +699,12 @@ export const StorageService = {
     }
     if (data.tests && Array.isArray(data.tests)) {
       setJson(STORAGE_KEYS.TESTS, data.tests);
+    }
+    if (data.calendarDays && Array.isArray(data.calendarDays)) {
+      setJson(STORAGE_KEYS.CALENDAR_DAYS, data.calendarDays);
+    }
+    if (data.scheduledLessons && Array.isArray(data.scheduledLessons)) {
+      setJson(STORAGE_KEYS.SCHEDULED_LESSONS, data.scheduledLessons);
     }
     if (data.layoutConfig) {
       setJson(STORAGE_KEYS.LAYOUT_CONFIG, data.layoutConfig);
@@ -689,6 +754,8 @@ export const StorageService = {
     setJson(STORAGE_KEYS.LESSONS, []);
     setJson(STORAGE_KEYS.EVALUATIONS, []);
     setJson(STORAGE_KEYS.TESTS, []);
+    setJson(STORAGE_KEYS.CALENDAR_DAYS, []);
+    setJson(STORAGE_KEYS.SCHEDULED_LESSONS, []);
     setJson(STORAGE_KEYS.LAYOUT_CONFIG, DEFAULT_LAYOUT_CONFIG);
     notifyChange();
   },

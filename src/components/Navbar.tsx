@@ -17,8 +17,8 @@ interface Props {
   onSelectSchool: (id: string) => void;
   onOpenSchoolManager: () => void;
   onOpenBackupModal: () => void;
-  activeMainTab: 'alunni' | 'orario' | 'appello' | 'statistiche';
-  onChangeMainTab: (tab: 'alunni' | 'orario' | 'appello' | 'statistiche') => void;
+  activeMainTab: 'alunni' | 'calendario' | 'appello' | 'statistiche';
+  onChangeMainTab: (tab: 'alunni' | 'calendario' | 'appello' | 'statistiche') => void;
   totalStudentsInActiveSchool: number;
 }
 
@@ -133,15 +133,15 @@ export const Navbar: React.FC<Props> = ({
             </button>
 
             <button
-              onClick={() => onChangeMainTab('orario')}
+              onClick={() => onChangeMainTab('calendario')}
               className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
-                activeMainTab === 'orario'
+                activeMainTab === 'calendario'
                   ? 'bg-white text-[#2C6E63] shadow-2xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <Clock className="h-3.5 w-3.5" />
-              Orario & Giornata
+              <Calendar className="h-3.5 w-3.5 text-petrol" />
+              Calendario & Giornata
             </button>
 
             <button
@@ -194,12 +194,12 @@ export const Navbar: React.FC<Props> = ({
             <Users className="h-3.5 w-3.5" /> Alunni
           </button>
           <button
-            onClick={() => onChangeMainTab('orario')}
+            onClick={() => onChangeMainTab('calendario')}
             className={`flex items-center gap-1 py-1 px-2.5 rounded-lg whitespace-nowrap ${
-              activeMainTab === 'orario' ? 'bg-teal-50 text-[#2C6E63]' : 'text-slate-500'
+              activeMainTab === 'calendario' ? 'bg-teal-50 text-[#2C6E63]' : 'text-slate-500'
             }`}
           >
-            <Clock className="h-3.5 w-3.5" /> Orario
+            <Calendar className="h-3.5 w-3.5" /> Calendario
           </button>
           <button
             onClick={() => onChangeMainTab('appello')}

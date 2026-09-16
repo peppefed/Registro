@@ -12,6 +12,31 @@ export interface School {
 
 export type DayOfWeek = 'lunedi' | 'martedi' | 'mercoledi' | 'giovedi' | 'venerdi' | 'sabato' | 'domenica';
 
+export type CalendarDayType = 'lezione' | 'recupero' | 'saggio' | 'festivo' | 'sospensione';
+
+export interface SchoolCalendarDay {
+  id: string;
+  schoolId: string;
+  date: string; // YYYY-MM-DD
+  type: CalendarDayType;
+  title?: string; // e.g. "Lezioni ordinarie", "Recupero", "Festa Patronale", "Saggio Invernale"
+  notes?: string;
+  color?: string;
+}
+
+export interface ScheduledLesson {
+  id: string;
+  schoolId: string;
+  studentId: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // e.g. "15:00"
+  endTime?: string;   // e.g. "15:45"
+  room?: string;
+  subject?: string;
+  isRecupero?: boolean;
+  notes?: string;
+}
+
 export interface WeeklyScheduleSlot {
   id: string;
   day: DayOfWeek;
@@ -125,6 +150,8 @@ export interface AppDatabaseState {
   lessons: LessonEntry[];
   evaluations: PeriodicEvaluation[];
   tests: IntermediateTest[];
+  calendarDays?: SchoolCalendarDay[];
+  scheduledLessons?: ScheduledLesson[];
   layoutConfig: ReportLayoutConfig;
 }
 
